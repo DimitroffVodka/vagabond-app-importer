@@ -3,9 +3,10 @@ import { VgbndUnresolvedDialog } from "./unresolved-dialog.mjs";
 import { VgbndSpellDialog }      from "./spell-dialog.mjs";
 import { VgbndMapper }           from "./mapper.mjs";
 import { VgbndFirebase }         from "./firebase.mjs";
+import { exportActorToPdf }      from "./export.mjs";
 
 // Re-export for external use / debugging
-export { VgbndBrowserDialog, VgbndUnresolvedDialog, VgbndSpellDialog, VgbndMapper, VgbndFirebase };
+export { VgbndBrowserDialog, VgbndUnresolvedDialog, VgbndSpellDialog, VgbndMapper, VgbndFirebase, exportActorToPdf };
 
 Hooks.once("init", () => {
   console.log("vgbnd-importer | Initialised");
@@ -16,6 +17,19 @@ Hooks.once("init", () => {
     config:  false,
     type:    String,
     default: "",
+  });
+
+  game.settings.register("vgbnd-importer", "export-template", {
+    name:    "VGBND.SettingExportTemplateName",
+    hint:    "VGBND.SettingExportTemplateHint",
+    scope:   "client",
+    config:  true,
+    type:    String,
+    choices: {
+      "interactive":       "VGBND.SettingExportTemplateInteractive",
+      "interactive-light": "VGBND.SettingExportTemplateInteractiveLight",
+    },
+    default: "interactive",
   });
 });
 

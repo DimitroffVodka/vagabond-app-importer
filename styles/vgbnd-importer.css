@@ -695,3 +695,13 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ── PDF Export Header Button ───────────────────────────── */
+
+.vgbnd-export-pdf {
+  cursor: pointer;
+}
+
+.vgbnd-export-pdf i {
+  pointer-events: none;
+}

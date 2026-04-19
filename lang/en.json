@@ -45,5 +45,15 @@
 
   "VGBND.Refresh": "Refresh",
   "VGBND.ImportedSuccess": "{name} imported successfully.",
-  "VGBND.ErrorCORSFallback": "Direct fetch blocked — opening in a new tab. Copy the JSON and use Import by UUID if needed."
+  "VGBND.ErrorCORSFallback": "Direct fetch blocked — opening in a new tab. Copy the JSON and use Import by UUID if needed.",
+
+  "VGBND.SettingExportTemplateName": "PDF Export Template",
+  "VGBND.SettingExportTemplateHint": "Choose which hero-record PDF to fill when exporting a character.",
+  "VGBND.SettingExportTemplateInteractive": "Interactive (Dark)",
+  "VGBND.SettingExportTemplateInteractiveLight": "Interactive (Light)",
+  "VGBND.ExportButtonTooltip": "Export to PDF",
+  "VGBND.ExportStarting": "Exporting {name} to PDF…",
+  "VGBND.ExportSuccess": "Exported \"{name}\" → {filename}",
+  "VGBND.ExportErrorNotCharacter": "Please select a character actor to export.",
+  "VGBND.ExportErrorFailed": "PDF Export failed: {error}"
 }
