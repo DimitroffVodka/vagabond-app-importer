@@ -371,6 +371,13 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       const res = await fetch(fetchUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json();
+      // ?format=foundry strips spells — fetch native shape and merge spell names
+      // so the mapper can resolve them against the vagabond.spells compendium.
+      const spellNames = await VgbndBrowserDialog.#fetchSpellNames(uuid, useProxy, proxyPref);
+      if (spellNames.length) {
+        raw.items = raw.items ?? [];
+        for (const name of spellNames) raw.items.push({ name, type: "spell" });
+      }
       if (statusEl) statusEl.textContent = game.i18n.localize("VGBND.Importing");
       await VgbndBrowserDialog.#createActor(raw);
       if (statusEl) statusEl.textContent = "";
@@ -403,9 +410,19 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     // Fallback: vgbd.app API (blocked by CORS in browser context, opens new tab).
     let raw;
     try {
-      const res = await fetch(`https://www.vgbnd.app/api/characters/${uuid}?format=foundry`);
+      const useProxy   = game.settings.get("vgbnd-importer", "use-cors-proxy");
+      const proxyPref  = (game.settings.get("vgbnd-importer", "cors-proxy-url") ?? "").trim();
+      const apiUrl     = `https://www.vgbnd.app/api/characters/${uuid}?format=foundry`;
+      const fetchUrl   = (useProxy && proxyPref) ? `${proxyPref}${encodeURIComponent(apiUrl)}` : apiUrl;
+      const res = await fetch(fetchUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       raw = await res.json();
+      // Merge spell names from native shape — ?format=foundry strips them.
+      const spellNames = await VgbndBrowserDialog.#fetchSpellNames(uuid, useProxy, proxyPref);
+      if (spellNames.length) {
+        raw.items = raw.items ?? [];
+        for (const name of spellNames) raw.items.push({ name, type: "spell" });
+      }
     } catch {
       ui.notifications.warn(game.i18n.localize("VGBND.ErrorCORSFallback"));
       window.open(`https://www.vgbnd.app/api/characters/${uuid}?format=foundry`, "_blank");
@@ -413,6 +430,31 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     }
 
     await VgbndBrowserDialog.#createActor(raw);
+  }
+
+  // Fetch the native (non-foundry-shape) character document and pull spell
+  // names. Best-effort — if the proxy is off or the request fails we just
+  // return [] and the caller proceeds without spell items.
+  static async #fetchSpellNames(uuid, useProxy, proxyPref) {
+    try {
+      const nativeUrl  = `https://www.vgbnd.app/api/characters/${uuid}`;
+      const fetchUrl   = (useProxy && proxyPref) ? `${proxyPref}${encodeURIComponent(nativeUrl)}` : nativeUrl;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const c = data?.character ?? data ?? {};
+      const names = [];
+      for (const sp of (c.known_spells ?? [])) {
+        if (!sp) continue;
+        const n = typeof sp === "string" ? sp : (sp.name ?? sp.id ?? null);
+        if (n) names.push(n);
+      }
+      if (c.ancestry_bonus_spell) names.push(c.ancestry_bonus_spell);
+      return names;
+    } catch (err) {
+      console.warn("vgbnd-importer | spell-merge fetch failed:", err.message);
+      return [];
+    }
   }
 
   // ── Firestore → mapper-compatible format ────────────────────────────────────

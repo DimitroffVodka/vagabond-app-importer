@@ -2,6 +2,28 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.5.4 — 2026-04-28
+
+### Fixed
+- **Spells now import via the URL tab.** vgbnd.app's `?format=foundry` endpoint
+  silently strips spells from the response (`items[]` has zero entries of
+  `type:"spell"` even when the character has `known_spells` populated). The
+  URL-import path now does a second fetch against the native (non-foundry)
+  shape, pulls `known_spells` and `ancestry_bonus_spell`, and injects them as
+  `{name, type:"spell"}` entries so the existing mapper can resolve them
+  against the `vagabond.spells` compendium — same path the sign-in import
+  already used.
+- Same fix applied to the Firestore-fallback API path in `#importByUuid`.
+
+### Notes
+- Spell descriptions still come from the compendium, not vgbnd.app — vgbnd.app
+  has never exported spell text. If a spell name is missing from your
+  compendium, the importer's "Unresolved" dialog will surface it for manual
+  search/create as usual.
+- The manual JSON-paste fallback (used when CORS blocks direct fetch and the
+  proxy is off) does not yet merge spells. Sign in or enable the CORS proxy
+  for a full import.
+
 ## v2.5.3 — 2026-04-28
 
 ### Added
