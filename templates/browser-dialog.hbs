@@ -1,38 +1,7 @@
 <div class="vgbnd-browser-root">
-
-  {{!-- ── Login view ─────────────────────────────────────────────────────────── --}}
-  {{#if isLogin}}
-  <div class="vgbnd-login-panel">
-    <div class="vgbnd-login-brand">
-      <i class="fa-solid fa-dragon"></i>
-      <span>Vagabond</span>
-    </div>
-
-    {{#if error}}
-    <p class="vgbnd-error-msg">{{error}}</p>
-    {{/if}}
-
-    <label for="vgbnd-email">{{localize "VGBND.Email"}}</label>
-    <input id="vgbnd-email" type="email" autocomplete="email" placeholder="you@example.com" />
-
-    <label for="vgbnd-password">{{localize "VGBND.Password"}}</label>
-    <input id="vgbnd-password" type="password" autocomplete="current-password" placeholder="••••••••" />
-
-    <button type="button" data-action="signIn" {{#if loading}}disabled{{/if}}>
-      {{#if loading}}
-        <i class="fa-solid fa-spinner fa-spin"></i> {{localize "VGBND.SigningIn"}}
-      {{else}}
-        <i class="fa-solid fa-right-to-bracket"></i> {{localize "VGBND.SignIn"}}
-      {{/if}}
-    </button>
-  </div>
-  {{/if}}
-
-  {{!-- ── Browser view ──────────────────────────────────────────────────────── --}}
-  {{#if isBrowser}}
   <div class="vgbnd-browser-panel">
 
-    {{!-- Header: tabs + sign-out --}}
+    {{!-- Header: tabs + (signed-in only) refresh & sign-out --}}
     <div class="vgbnd-browser-header">
       <div class="vgbnd-tabs">
         <button type="button" class="vgbnd-tab {{#if isMine}}active{{/if}}"
@@ -44,7 +13,12 @@
           <i class="fa-solid fa-people-group"></i> {{localize "VGBND.TabGroups"}}
           {{#if groups.length}}<span class="vgbnd-badge">{{groups.length}}</span>{{/if}}
         </button>
+        <button type="button" class="vgbnd-tab {{#if isUrl}}active{{/if}}"
+                data-action="switchTab" data-tab="url">
+          <i class="fa-solid fa-link"></i> {{localize "VGBND.TabUrl"}}
+        </button>
       </div>
+      {{#if isSignedIn}}
       <button type="button" class="vgbnd-refresh-btn" data-action="refresh"
               title="{{localize 'VGBND.Refresh'}}" {{#if loading}}disabled{{/if}}>
         <i class="fa-solid fa-rotate-right {{#if loading}}fa-spin{{/if}}"></i>
@@ -53,118 +27,196 @@
               title="{{localize 'VGBND.SignOut'}}">
         <i class="fa-solid fa-right-from-bracket"></i> {{localize "VGBND.SignOut"}}
       </button>
+      {{/if}}
     </div>
-
-    {{#if error}}<p class="vgbnd-error-msg">{{error}}</p>{{/if}}
 
     {{!-- ── My Characters tab ──────────────────────────────────────────────── --}}
     {{#if isMine}}
-      {{#if loading}}
-        <div class="vgbnd-state-msg">
-          <i class="fa-solid fa-spinner fa-spin"></i> {{localize "VGBND.Loading"}}
-        </div>
-      {{else if characters.length}}
-        <div class="vgbnd-mine-toolbar">
-          <label class="vgbnd-select-all-label">
-            <input type="checkbox" class="vgbnd-select-all" {{#if allSelected}}checked{{/if}}>
-            {{localize "VGBND.SelectAll"}}
-          </label>
-          <button type="button" data-action="importSelected" class="vgbnd-import-selected-btn"
-                  {{#unless anySelected}}disabled{{/unless}}>
-            <i class="fa-solid fa-cloud-arrow-down"></i>
-            {{localize "VGBND.ImportSelected"}}{{#if anySelected}} ({{selectedCount}}){{/if}}
+      {{#unless isSignedIn}}
+        <div class="vgbnd-login-panel">
+          <div class="vgbnd-login-brand">
+            <i class="fa-solid fa-dragon"></i>
+            <span>Vagabond</span>
+          </div>
+          {{#if error}}<p class="vgbnd-error-msg">{{error}}</p>{{/if}}
+          <label for="vgbnd-email">{{localize "VGBND.Email"}}</label>
+          <input id="vgbnd-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          <label for="vgbnd-password">{{localize "VGBND.Password"}}</label>
+          <input id="vgbnd-password" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <button type="button" data-action="signIn" {{#if loading}}disabled{{/if}}>
+            {{#if loading}}
+              <i class="fa-solid fa-spinner fa-spin"></i> {{localize "VGBND.SigningIn"}}
+            {{else}}
+              <i class="fa-solid fa-right-to-bracket"></i> {{localize "VGBND.SignIn"}}
+            {{/if}}
           </button>
         </div>
-        <div class="vgbnd-char-grid">
-          {{#each characters}}
-          <div class="vgbnd-char-card{{#if selected}} vgbnd-card-selected{{/if}}">
-            <div class="vgbnd-card-portrait" style="background-image: url('{{portrait}}')">
-              <input type="checkbox" class="vgbnd-card-check" data-uuid="{{id}}" {{#if selected}}checked{{/if}}>
-            </div>
-            <div class="vgbnd-card-body">
-              <div class="vgbnd-card-name">{{name}}</div>
-              {{#if summary}}<div class="vgbnd-card-subtitle">{{summary}}</div>{{/if}}
-              {{#if updated}}<div class="vgbnd-card-date">{{localize "VGBND.Updated"}}: {{updated}}</div>{{/if}}
-            </div>
-            <button type="button" class="vgbnd-card-import-btn" data-action="importChar" data-uuid="{{id}}">
-              <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.Import"}}
+      {{else}}
+        {{#if error}}<p class="vgbnd-error-msg">{{error}}</p>{{/if}}
+        {{#if loading}}
+          <div class="vgbnd-state-msg">
+            <i class="fa-solid fa-spinner fa-spin"></i> {{localize "VGBND.Loading"}}
+          </div>
+        {{else if characters.length}}
+          <div class="vgbnd-mine-toolbar">
+            <label class="vgbnd-select-all-label">
+              <input type="checkbox" class="vgbnd-select-all" {{#if allSelected}}checked{{/if}}>
+              {{localize "VGBND.SelectAll"}}
+            </label>
+            <button type="button" data-action="importSelected" class="vgbnd-import-selected-btn"
+                    {{#unless anySelected}}disabled{{/unless}}>
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+              {{localize "VGBND.ImportSelected"}}{{#if anySelected}} ({{selectedCount}}){{/if}}
             </button>
           </div>
-          {{/each}}
-        </div>
-      {{else}}
-        <div class="vgbnd-state-msg">{{localize "VGBND.NoCharacters"}}</div>
-      {{/if}}
+          <div class="vgbnd-char-grid">
+            {{#each characters}}
+            <div class="vgbnd-char-card{{#if selected}} vgbnd-card-selected{{/if}}">
+              <div class="vgbnd-card-portrait" style="background-image: url('{{portrait}}')">
+                <input type="checkbox" class="vgbnd-card-check" data-uuid="{{id}}" {{#if selected}}checked{{/if}}>
+              </div>
+              <div class="vgbnd-card-body">
+                <div class="vgbnd-card-name">{{name}}</div>
+                {{#if summary}}<div class="vgbnd-card-subtitle">{{summary}}</div>{{/if}}
+                {{#if updated}}<div class="vgbnd-card-date">{{localize "VGBND.Updated"}}: {{updated}}</div>{{/if}}
+              </div>
+              <button type="button" class="vgbnd-card-import-btn" data-action="importChar" data-uuid="{{id}}">
+                <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.Import"}}
+              </button>
+            </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <div class="vgbnd-state-msg">{{localize "VGBND.NoCharacters"}}</div>
+        {{/if}}
+      {{/unless}}
     {{/if}}
 
     {{!-- ── Groups tab ──────────────────────────────────────────────────────── --}}
     {{#if isGroup}}
-      {{#if groups.length}}
-        <div class="vgbnd-group-layout">
-
-          {{!-- Sidebar: group list --}}
-          <div class="vgbnd-group-sidebar">
-            {{#each groups}}
-            <button type="button"
-                    class="vgbnd-group-btn{{#if isSelected}} active{{/if}}"
-                    data-action="selectGroup" data-group-id="{{id}}">
-              <i class="fa-solid fa-shield-halved"></i>
-              <div class="vgbnd-group-btn-text">
-                <span class="vgbnd-group-name">{{#if name}}{{name}}{{else}}{{id}}{{/if}}</span>
-                {{#if members.length}}
-                <span class="vgbnd-group-members">{{members.length}} {{localize "VGBND.Members"}}</span>
-                {{/if}}
-              </div>
-            </button>
-            {{/each}}
+      {{#unless isSignedIn}}
+        <div class="vgbnd-login-panel">
+          <div class="vgbnd-login-brand">
+            <i class="fa-solid fa-dragon"></i>
+            <span>Vagabond</span>
           </div>
-
-          {{!-- Content: characters for selected group --}}
-          <div class="vgbnd-group-content">
+          {{#if error}}<p class="vgbnd-error-msg">{{error}}</p>{{/if}}
+          <label for="vgbnd-email">{{localize "VGBND.Email"}}</label>
+          <input id="vgbnd-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          <label for="vgbnd-password">{{localize "VGBND.Password"}}</label>
+          <input id="vgbnd-password" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <button type="button" data-action="signIn" {{#if loading}}disabled{{/if}}>
             {{#if loading}}
-              <div class="vgbnd-state-msg"><i class="fa-solid fa-spinner fa-spin"></i></div>
-            {{else if selectedGroup}}
-              {{#if groupChars.length}}
-                {{#if isGM}}
-                <div class="vgbnd-group-toolbar">
-                  <button type="button" data-action="importGroup">
-                    <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.ImportAll"}}
-                  </button>
-                </div>
-                {{/if}}
-                <div class="vgbnd-char-list">
-                  {{#each groupChars}}
-                  <div class="vgbnd-char-row" data-uuid="{{id}}">
-                    <div class="vgbnd-row-portrait" style="background-image: url('{{portrait}}')"></div>
-                    <div class="vgbnd-row-info">
-                      <div class="vgbnd-row-name">{{name}}</div>
-                      <div class="vgbnd-row-bottom">
-                        {{#if summary}}<span class="vgbnd-row-subtitle">{{summary}}</span>{{/if}}
-                        {{#if playerName}}<span class="vgbnd-row-player"><i class="fa-solid fa-user fa-xs"></i> {{playerName}}</span>{{/if}}
-                      </div>
-                    </div>
-                    <button type="button" class="vgbnd-row-import"
-                            data-action="importChar" data-uuid="{{id}}">
-                      <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.Import"}}
-                    </button>
-                  </div>
-                  {{/each}}
-                </div>
-              {{else}}
-                <div class="vgbnd-state-msg">{{localize "VGBND.NoGroupChars"}}</div>
-              {{/if}}
+              <i class="fa-solid fa-spinner fa-spin"></i> {{localize "VGBND.SigningIn"}}
             {{else}}
-              <div class="vgbnd-state-msg">{{localize "VGBND.SelectGroup"}}</div>
+              <i class="fa-solid fa-right-to-bracket"></i> {{localize "VGBND.SignIn"}}
             {{/if}}
-          </div>
-
+          </button>
         </div>
       {{else}}
-        <div class="vgbnd-state-msg">{{localize "VGBND.NoGroups"}}</div>
-      {{/if}}
+        {{#if error}}<p class="vgbnd-error-msg">{{error}}</p>{{/if}}
+        {{#if groups.length}}
+          <div class="vgbnd-group-layout">
+
+            {{!-- Sidebar: group list --}}
+            <div class="vgbnd-group-sidebar">
+              {{#each groups}}
+              <button type="button"
+                      class="vgbnd-group-btn{{#if isSelected}} active{{/if}}"
+                      data-action="selectGroup" data-group-id="{{id}}">
+                <i class="fa-solid fa-shield-halved"></i>
+                <div class="vgbnd-group-btn-text">
+                  <span class="vgbnd-group-name">{{#if name}}{{name}}{{else}}{{id}}{{/if}}</span>
+                  {{#if members.length}}
+                  <span class="vgbnd-group-members">{{members.length}} {{localize "VGBND.Members"}}</span>
+                  {{/if}}
+                </div>
+              </button>
+              {{/each}}
+            </div>
+
+            {{!-- Content: characters for selected group --}}
+            <div class="vgbnd-group-content">
+              {{#if loading}}
+                <div class="vgbnd-state-msg"><i class="fa-solid fa-spinner fa-spin"></i></div>
+              {{else if selectedGroup}}
+                {{#if groupChars.length}}
+                  {{#if isGM}}
+                  <div class="vgbnd-group-toolbar">
+                    <button type="button" data-action="importGroup">
+                      <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.ImportAll"}}
+                    </button>
+                  </div>
+                  {{/if}}
+                  <div class="vgbnd-char-list">
+                    {{#each groupChars}}
+                    <div class="vgbnd-char-row" data-uuid="{{id}}">
+                      <div class="vgbnd-row-portrait" style="background-image: url('{{portrait}}')"></div>
+                      <div class="vgbnd-row-info">
+                        <div class="vgbnd-row-name">{{name}}</div>
+                        <div class="vgbnd-row-bottom">
+                          {{#if summary}}<span class="vgbnd-row-subtitle">{{summary}}</span>{{/if}}
+                          {{#if playerName}}<span class="vgbnd-row-player"><i class="fa-solid fa-user fa-xs"></i> {{playerName}}</span>{{/if}}
+                        </div>
+                      </div>
+                      <button type="button" class="vgbnd-row-import"
+                              data-action="importChar" data-uuid="{{id}}">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> {{localize "VGBND.Import"}}
+                      </button>
+                    </div>
+                    {{/each}}
+                  </div>
+                {{else}}
+                  <div class="vgbnd-state-msg">{{localize "VGBND.NoGroupChars"}}</div>
+                {{/if}}
+              {{else}}
+                <div class="vgbnd-state-msg">{{localize "VGBND.SelectGroup"}}</div>
+              {{/if}}
+            </div>
+
+          </div>
+        {{else}}
+          <div class="vgbnd-state-msg">{{localize "VGBND.NoGroups"}}</div>
+        {{/if}}
+      {{/unless}}
+    {{/if}}
+
+    {{!-- ── By URL tab ──────────────────────────────────────────────────────── --}}
+    {{#if isUrl}}
+      <div class="vgbnd-url-panel">
+        <div class="vgbnd-url-form-group">
+          <label for="vgbnd-uuid-input">{{localize "VGBND.UUIDLabel"}}</label>
+          <div class="vgbnd-uuid-row">
+            <input id="vgbnd-uuid-input" type="text"
+                   placeholder="{{localize "VGBND.UUIDPlaceholder"}}"
+                   value="{{urlInput}}" autofocus />
+            <button type="button" data-action="urlOpenTab"
+                    title="{{localize 'VGBND.OpenUrlTitle'}}">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="vgbnd-json-section{{#if jsonFallbackVisible}} visible{{/if}}">
+          <div class="vgbnd-cors-hint">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            {{localize "VGBND.CORSHint"}}
+          </div>
+          <div class="vgbnd-url-form-group">
+            <label for="vgbnd-json-input">{{localize "VGBND.JSONLabel"}}</label>
+            <textarea id="vgbnd-json-input" rows="8"
+                      placeholder="{{localize 'VGBND.JSONPlaceholder'}}">{{jsonInput}}</textarea>
+          </div>
+        </div>
+
+        <p class="vgbnd-url-status"></p>
+
+        <button type="button" class="vgbnd-url-import-btn" data-action="urlImport">
+          <i class="fa-solid fa-cloud-arrow-down"></i>
+          {{localize "VGBND.ImportButton"}}
+        </button>
+      </div>
     {{/if}}
 
   </div>
-  {{/if}}
-
 </div>

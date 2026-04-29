@@ -679,3 +679,104 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ── By URL tab ─────────────────────────────────────────── */
+
+.vgbnd-url-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  gap: 10px;
+}
+
+.vgbnd-url-form-group label {
+  display: block;
+  font-weight: bold;
+  font-size: 0.82em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  opacity: 0.75;
+}
+
+.vgbnd-url-form-group input,
+.vgbnd-url-form-group textarea {
+  width: 100%;
+  font-family: inherit;
+}
+
+.vgbnd-uuid-row {
+  display: flex;
+  gap: 6px;
+}
+
+.vgbnd-uuid-row input {
+  flex: 1;
+}
+
+.vgbnd-uuid-row button {
+  flex-shrink: 0;
+  width: auto;
+  padding: 0 12px;
+}
+
+.vgbnd-json-section {
+  display: none;
+}
+
+.vgbnd-json-section.visible {
+  display: block;
+}
+
+.vgbnd-cors-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--color-level-warning, #a63);
+  background: color-mix(in srgb, var(--color-level-warning, #a63) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-level-warning, #a63) 32%, transparent);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 0.85em;
+  margin-bottom: 8px;
+}
+
+.vgbnd-cors-hint i {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vgbnd-url-status {
+  margin: 0;
+  font-size: 0.82em;
+  font-style: italic;
+  min-height: 1.2em;
+  opacity: 0.7;
+}
+
+.vgbnd-url-import-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 0.9em;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--color-level-warning, #a63) 35%, transparent);
+  background: color-mix(in srgb, var(--color-level-warning, #a63) 10%, transparent);
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.vgbnd-url-import-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-level-warning, #a63) 22%, transparent);
+  border-color: color-mix(in srgb, var(--color-level-warning, #a63) 55%, transparent);
+}
+
+.vgbnd-url-import-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

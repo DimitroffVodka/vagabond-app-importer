@@ -2,6 +2,30 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.5.3 — 2026-04-28
+
+### Added
+- **By URL** tab in the Character Browser: paste a vgbnd.app character URL or
+  raw UUID and import without signing in.
+- **Manual JSON paste fallback** that surfaces when the direct fetch is blocked
+  by CORS (browser-mode Foundry, no proxy).
+- New module settings: **Use CORS Proxy for URL Import** and **CORS Proxy URL
+  Prefix** (defaults to `api.codetabs.com`).
+- Localized strings for the new flow (TabUrl, UUIDLabel/Placeholder, JSONLabel,
+  CORSHint, Fetching/Importing, ErrorNoInput/InvalidUUID/BadJSON, etc.).
+
+### Changed
+- Browser dialog now renders sign-in inline per tab instead of a separate Login
+  view, so the URL tab is reachable without authenticating.
+- Significant updates across `browser-dialog.mjs`, `firebase.mjs`, `sync.mjs`,
+  `mapper.mjs`, `export.mjs`, and `unresolved-dialog.mjs` to support the new UI
+  and import paths.
+- Updated styles to cover the new URL panel and CORS hint.
+
+### Fixed
+- Restores work that existed in the local development copy but had not been
+  pushed to `main` — v2.5.2 was missing all of it.
+
 ## v2.5.2 — 2026-04-28
 
 ### Changed

@@ -20,6 +20,8 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       importChar:     VgbndBrowserDialog.#onImportChar,
       importGroup:    VgbndBrowserDialog.#onImportGroup,
       importSelected: VgbndBrowserDialog.#onImportSelected,
+      urlOpenTab:  VgbndBrowserDialog.#onUrlOpenTab,
+      urlImport:   VgbndBrowserDialog.#onUrlImport,
     },
   };
 
@@ -30,7 +32,7 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
   // ── State ──────────────────────────────────────────────────────────────────
 
   #view             = "login"; // "login" | "browser"
-  #tab              = "mine";  // "mine"  | "group"
+  #tab              = "mine";  // "mine"  | "group" | "url"
   #characters       = [];
   #groups           = [];
   #selectedGrpId    = null;
@@ -39,11 +41,13 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
   #loading          = false;
   #initDone         = false;   // guard so _onRender only auto-loads once
   #selectedCharIds  = new Set();
+  #urlState         = { uuidInput: "", jsonText: "", fallbackVisible: false };
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   async _prepareContext() {
-    if (VgbndFirebase.isSignedIn() && this.#view === "login") this.#view = "browser";
+    const isSignedIn = VgbndFirebase.isSignedIn();
+    if (isSignedIn && this.#view === "login") this.#view = "browser";
 
     const selGroup = this.#groups.find(g => g.id === this.#selectedGrpId) ?? null;
 
@@ -53,10 +57,12 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     }));
 
     return {
+      isSignedIn,
       isLogin:   this.#view === "login",
       isBrowser: this.#view === "browser",
       isMine:    this.#tab === "mine",
       isGroup:   this.#tab === "group",
+      isUrl:     this.#tab === "url",
       loading:   this.#loading,
       error:     this.#error,
       characters:    fmtChars,
@@ -67,6 +73,9 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       anySelected:   this.#selectedCharIds.size > 0,
       allSelected:   this.#selectedCharIds.size > 0 && this.#selectedCharIds.size === this.#characters.length,
       selectedCount: this.#selectedCharIds.size,
+      urlInput:            this.#urlState.uuidInput,
+      jsonInput:           this.#urlState.jsonText,
+      jsonFallbackVisible: this.#urlState.fallbackVisible,
     };
   }
 
@@ -82,6 +91,7 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
         const uuid = e.currentTarget.dataset.uuid;
         if (e.currentTarget.checked) this.#selectedCharIds.add(uuid);
         else this.#selectedCharIds.delete(uuid);
+        this.#captureUrlState();
         this.render();
       });
     });
@@ -93,9 +103,35 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       selectAll.addEventListener("change", e => {
         if (e.currentTarget.checked) this.#characters.forEach(c => this.#selectedCharIds.add(c.id));
         else this.#selectedCharIds.clear();
+        this.#captureUrlState();
         this.render();
       });
     }
+  }
+
+  // Save in-flight URL-tab DOM values into #urlState so re-renders triggered by
+  // tab switches, sign-in/out, refresh, etc. don't blank the user's typed input.
+  #captureUrlState() {
+    if (this.#tab !== "url") return;
+    const uuidEl    = this.element?.querySelector("#vgbnd-uuid-input");
+    const jsonEl    = this.element?.querySelector("#vgbnd-json-input");
+    const sectionEl = this.element?.querySelector(".vgbnd-json-section");
+    if (uuidEl)    this.#urlState.uuidInput       = uuidEl.value ?? "";
+    if (jsonEl)    this.#urlState.jsonText        = jsonEl.value ?? "";
+    if (sectionEl) this.#urlState.fallbackVisible = sectionEl.classList.contains("visible");
+  }
+
+  #showJsonFallback() {
+    const section = this.element.querySelector(".vgbnd-json-section");
+    section?.classList.add("visible");
+    section?.querySelector("textarea")?.focus();
+    this.#urlState.fallbackVisible = true;
+    this.setPosition({ height: "auto" });
+  }
+
+  static extractUUID(input) {
+    const match = input?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return match ? match[0] : null;
   }
 
   // ── Formatting ─────────────────────────────────────────────────────────────
@@ -124,6 +160,7 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
   async #loadMyData() {
     this.#loading = true;
     this.#error   = "";
+    this.#captureUrlState();
     this.render();
     try {
       const tok = await VgbndFirebase.getToken();
@@ -139,6 +176,7 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       console.error("vgbnd-importer | list error", err);
     } finally {
       this.#loading = false;
+      this.#captureUrlState();
       this.render();
     }
   }
@@ -150,11 +188,13 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const password = this.element.querySelector("#vgbnd-password")?.value;
     if (!email || !password) {
       this.#error = game.i18n.localize("VGBND.ErrorLoginMissing");
+      this.#captureUrlState();
       this.render();
       return;
     }
     this.#error   = "";
     this.#loading = true;
+    this.#captureUrlState();
     this.render();
     try {
       await VgbndFirebase.signIn(email, password);
@@ -164,11 +204,13 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     } catch (err) {
       this.#error   = err.message;
       this.#loading = false;
+      this.#captureUrlState();
       this.render();
     }
   }
 
   static #onSignOut() {
+    this.#captureUrlState();
     VgbndFirebase.signOut();
     this.#view            = "login";
     this.#tab             = "mine";
@@ -184,11 +226,13 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
   }
 
   static #onSwitchTab(_e, target) {
+    this.#captureUrlState();
     this.#tab = target.dataset.tab;
     this.render();
   }
 
   static async #onRefresh() {
+    this.#captureUrlState();
     this.#characters      = [];
     this.#groups          = [];
     this.#groupChars      = [];
@@ -203,8 +247,9 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const groupId = target.dataset.groupId;
     this.#selectedGrpId = groupId;
     const group = this.#groups.find(g => g.id === groupId);
-    if (!group?.members?.length) { this.render(); return; }
+    if (!group?.members?.length) { this.#captureUrlState(); this.render(); return; }
     this.#loading = true;
+    this.#captureUrlState();
     this.render();
     try {
       const tok = await VgbndFirebase.getToken();
@@ -236,6 +281,7 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       this.#error = err.message;
     } finally {
       this.#loading = false;
+      this.#captureUrlState();
       this.render();
     }
   }
@@ -266,8 +312,75 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const ids = [...this.#selectedCharIds];
     if (!ids.length) return;
     this.#selectedCharIds.clear();
+    this.#captureUrlState();
     this.render();
     for (const id of ids) await VgbndBrowserDialog.#importByUuid(id);
+  }
+
+  // ── URL tab actions ─────────────────────────────────────────────────────────
+
+  static #onUrlOpenTab() {
+    const input = this.element.querySelector("#vgbnd-uuid-input")?.value?.trim() ?? "";
+    const uuid  = VgbndBrowserDialog.extractUUID(input);
+    if (!uuid) {
+      ui.notifications.warn(game.i18n.localize("VGBND.ErrorInvalidUUID"));
+      return;
+    }
+    window.open(`https://www.vgbnd.app/api/characters/${uuid}?format=foundry`, "_blank");
+  }
+
+  static async #onUrlImport() {
+    const uuidInput = this.element.querySelector("#vgbnd-uuid-input")?.value?.trim() ?? "";
+    const jsonText  = this.element.querySelector("#vgbnd-json-input")?.value?.trim() ?? "";
+    const statusEl  = this.element.querySelector(".vgbnd-url-status");
+    const importBtn = this.element.querySelector("[data-action='urlImport']");
+
+    // Paste-JSON path wins if both are provided
+    if (jsonText) {
+      let raw;
+      try {
+        raw = JSON.parse(jsonText);
+      } catch (err) {
+        ui.notifications.error(game.i18n.format("VGBND.ErrorBadJSON", { error: err.message }));
+        return;
+      }
+      if (importBtn) importBtn.disabled = true;
+      if (statusEl)  statusEl.textContent = game.i18n.localize("VGBND.Importing");
+      try {
+        await VgbndBrowserDialog.#createActor(raw);
+      } finally {
+        if (importBtn) importBtn.disabled = false;
+        if (statusEl)  statusEl.textContent = "";
+      }
+      return;
+    }
+
+    const uuid = VgbndBrowserDialog.extractUUID(uuidInput);
+    if (!uuid) {
+      ui.notifications.warn(game.i18n.localize("VGBND.ErrorNoInput"));
+      return;
+    }
+
+    if (importBtn) importBtn.disabled = true;
+    if (statusEl)  statusEl.textContent = game.i18n.localize("VGBND.Fetching");
+    try {
+      const apiUrl     = `https://www.vgbnd.app/api/characters/${uuid}?format=foundry`;
+      const useProxy   = game.settings.get("vgbnd-importer", "use-cors-proxy");
+      const proxyPref  = (game.settings.get("vgbnd-importer", "cors-proxy-url") ?? "").trim();
+      const fetchUrl   = (useProxy && proxyPref) ? `${proxyPref}${encodeURIComponent(apiUrl)}` : apiUrl;
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const raw = await res.json();
+      if (statusEl) statusEl.textContent = game.i18n.localize("VGBND.Importing");
+      await VgbndBrowserDialog.#createActor(raw);
+      if (statusEl) statusEl.textContent = "";
+    } catch {
+      // CORS, network, parse, or non-2xx — surface the paste-JSON fallback
+      this.#showJsonFallback();
+      if (statusEl) statusEl.textContent = game.i18n.localize("VGBND.CORSHint");
+    } finally {
+      if (importBtn) importBtn.disabled = false;
+    }
   }
 
   // ── Core import ─────────────────────────────────────────────────────────────

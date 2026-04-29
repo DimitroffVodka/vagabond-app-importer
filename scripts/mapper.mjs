@@ -36,6 +36,10 @@ export class VgbndMapper {
   // equipmentType values that should be auto-equipped on import
   static #AUTO_EQUIP_TYPES = new Set(["weapon", "armor"]);
 
+  // Category words the compendium uses as a comma-prefix.
+  // vgbnd.app emits "Healing I Potion"; the compendium calls it "Potion, Healing I".
+  static #COMMA_PREFIX_TOKENS = ["potion", "oil", "acid", "torch", "candle", "poison", "lantern", "book"];
+
   // ──────────────────────────────────────────────────────────
   //  Public API
   // ──────────────────────────────────────────────────────────
@@ -103,15 +107,15 @@ export class VgbndMapper {
 
   /**
    * Look up an item across the relevant packs.
-   * Returns the first match. Warns if a pack contains duplicates.
+   * Tries the original name first, then falls back to known naming-convention
+   * permutations (e.g. "Healing I Potion" → "Potion, Healing I").
+   * Warns if a pack contains duplicates.
    */
   static async #lookupItem(apiItem) {
-    const name = apiItem.name?.trim().toLowerCase();
-    if (!name) return null;
+    if (!apiItem.name) return null;
+    const variants = this.#nameVariants(apiItem.name);
 
-    const packIds = this.#packsForType(apiItem.type);
-
-    for (const packId of packIds) {
+    for (const packId of this.#packsForType(apiItem.type)) {
       const pack = game.packs.get(packId);
       if (!pack) {
         console.warn(`vgbnd-importer | Pack not found: ${packId}`);
@@ -120,20 +124,76 @@ export class VgbndMapper {
 
       await pack.getIndex();
 
-      const matches = pack.index.filter(e => e.name.trim().toLowerCase() === name);
+      for (const variant of variants) {
+        const matches = pack.index.filter(e => this.#normalizeName(e.name) === variant);
+        if (matches.length === 0) continue;
 
-      if (matches.length === 0) continue;
+        if (matches.length > 1) {
+          console.warn(
+            `vgbnd-importer | "${apiItem.name}" has ${matches.length} entries in ${packId} — using the first one.`
+          );
+        }
 
-      if (matches.length > 1) {
-        console.warn(
-          `vgbnd-importer | "${apiItem.name}" has ${matches.length} entries in ${packId} — using the first one.`
-        );
+        if (variant !== variants[0]) {
+          console.info(
+            `vgbnd-importer | "${apiItem.name}" matched as "${matches[0].name}" via name-permutation rule.`
+          );
+        }
+
+        return await pack.getDocument(matches[0]._id);
       }
-
-      return await pack.getDocument(matches[0]._id);
     }
 
     return null;
+  }
+
+  /**
+   * Normalize a name for comparison: lowercase, trim, collapse whitespace,
+   * fold smart quotes to straight quotes.
+   */
+  static #normalizeName(name) {
+    return String(name)
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  /**
+   * Build the ordered list of normalized name candidates to try when looking
+   * up `apiName` in the compendium. The first entry is always the exact
+   * (normalized) input; later entries are permutations driven by known
+   * conventions in the Vagabond compendium.
+   */
+  static #nameVariants(apiName) {
+    const base = this.#normalizeName(apiName);
+    const variants = [base];
+    const seen = new Set(variants);
+    const push = v => { if (v && !seen.has(v)) { seen.add(v); variants.push(v); } };
+
+    // Try both the original and singular form (strip trailing "s").
+    // The compendium uses singular forms ("Lantern, hooded"), but the API
+    // sometimes emits plurals ("Hooded Lanterns").
+    const forms = [base];
+    if (base.endsWith("s") && base.length > 3) forms.push(base.slice(0, -1));
+
+    for (const form of forms) {
+      if (form !== base) push(form);
+
+      // "X Spell Scroll" / "Scroll of X" → "Scroll, Spell"
+      if (/\bspell\sscroll$/.test(form) || /^scroll of\s+/.test(form)) {
+        push("scroll, spell");
+      }
+
+      // "X Y Pivot" → "Pivot, X Y" for known category words
+      for (const pivot of this.#COMMA_PREFIX_TOKENS) {
+        const m = form.match(new RegExp(`^(.+)\\s+${pivot}$`));
+        if (m) push(`${pivot}, ${m[1]}`);
+      }
+    }
+
+    return variants;
   }
 
   static #packsForType(type) {
@@ -149,8 +209,9 @@ export class VgbndMapper {
    * @returns {Promise<Array<{name:string, packId:string, packLabel:string, id:string}>>}
    */
   static async searchByName(query, type) {
-    const needle = query.trim().toLowerCase();
+    const needle = this.#normalizeName(query);
     if (!needle) return [];
+    const words = needle.split(/\W+/).filter(Boolean);
 
     const results = [];
     const seen = new Set();
@@ -161,8 +222,7 @@ export class VgbndMapper {
       await pack.getIndex();
 
       for (const entry of pack.index) {
-        const haystack = entry.name.trim().toLowerCase();
-        const words = needle.split(/\W+/).filter(Boolean);
+        const haystack = this.#normalizeName(entry.name);
         const matches = haystack.includes(needle)
           || needle.includes(haystack)
           || words.every(w => haystack.includes(w));

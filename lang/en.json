@@ -29,6 +29,21 @@
 
   "VGBND.TabMine": "My Characters",
   "VGBND.TabGroups": "Groups",
+  "VGBND.TabUrl": "By URL",
+
+  "VGBND.UUIDLabel": "Character UUID or URL",
+  "VGBND.UUIDPlaceholder": "e.g. 38008c0c-555c-47c2-b336-3a83cba1b477 or https://www.vgbnd.app/character/...",
+  "VGBND.OpenUrlTitle": "Open character JSON in a new tab",
+  "VGBND.JSONLabel": "Paste character JSON",
+  "VGBND.JSONPlaceholder": "Copy all text from the opened tab and paste it here.",
+  "VGBND.ImportButton": "Import",
+  "VGBND.Fetching": "Fetching character data…",
+  "VGBND.Importing": "Importing character…",
+  "VGBND.CORSHint": "Direct fetch was blocked by the browser. Open the URL with the arrow button, copy all text from that page, and paste it below.",
+  "VGBND.ErrorNoInput": "Enter a character UUID or URL.",
+  "VGBND.ErrorInvalidUUID": "Could not extract a valid UUID from the input.",
+  "VGBND.ErrorBadJSON": "Could not parse JSON: {error}",
+
   "VGBND.Loading": "Loading…",
   "VGBND.Import": "Import",
   "VGBND.ImportAll": "Import All",
@@ -62,6 +77,11 @@
   "VGBND.SettingExportTemplateInteractiveLight": "Interactive (Light)",
   "VGBND.SettingExportFolderName": "PDF Export Folder",
   "VGBND.SettingExportFolderHint": "Firefox fallback only — a Save As dialog is used on all other browsers. Sets the folder inside your Foundry data directory where PDFs are saved when the dialog is unavailable.",
+  "VGBND.SettingUseCorsProxyName": "Use CORS Proxy for URL Import",
+  "VGBND.SettingUseCorsProxyHint": "When enabled, URL-tab imports route through a public CORS proxy so they work in browser-mode Foundry (vgbnd.app does not send CORS headers, so browser-mode fetches are otherwise blocked). Your character JSON will pass through the proxy service. Leave off if you use Foundry desktop or prefer the manual paste fallback.",
+  "VGBND.SettingCorsProxyUrlName": "CORS Proxy URL Prefix",
+  "VGBND.SettingCorsProxyUrlHint": "URL prefix used when 'Use CORS Proxy' is enabled. The character API URL is appended (URL-encoded) to this prefix. Default targets api.codetabs.com (free public proxy). Change only if you run your own proxy or prefer a different service.",
+
   "VGBND.ExportButtonTooltip": "Export to PDF",
   "VGBND.ExportStarting": "Exporting {name} to PDF…",
   "VGBND.ExportSuccess": "Exported \"{name}\" → {path}",

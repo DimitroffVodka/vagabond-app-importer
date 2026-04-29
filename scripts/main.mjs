@@ -59,6 +59,24 @@ Hooks.once("init", () => {
     range:   { min: 0.5, max: 1.5, step: 0.05 },
     default: 0.8,
   });
+
+  game.settings.register("vgbnd-importer", "use-cors-proxy", {
+    name:    "VGBND.SettingUseCorsProxyName",
+    hint:    "VGBND.SettingUseCorsProxyHint",
+    scope:   "client",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
+  game.settings.register("vgbnd-importer", "cors-proxy-url", {
+    name:    "VGBND.SettingCorsProxyUrlName",
+    hint:    "VGBND.SettingCorsProxyUrlHint",
+    scope:   "client",
+    config:  true,
+    type:    String,
+    default: "https://api.codetabs.com/v1/proxy/?quest=",
+  });
 });
 
 Hooks.on("updateActor", async (actor, changes) => {
