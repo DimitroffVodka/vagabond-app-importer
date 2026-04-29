@@ -500,17 +500,33 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     }
     if (fs.ancestry_bonus_spell) items.push({ name: fs.ancestry_bonus_spell, type: "spell" });
 
-    // Inventory → equipment (mapper resolves from weapon/armor/gear packs)
+    // Inventory → equipment (mapper resolves from weapon/armor/gear packs).
+    // If the item has relic_powers or a material, stash that data in a
+    // flag and tag the item as "pending forge" — the forge step runs
+    // post-actor-create (relic-forge needs a real Item document, not raw data).
     for (const inv of (fs.inventory ?? [])) {
       if (!inv.name) continue;
-      items.push({
+      const itemData = {
         name:   inv.name,
         type:   "equipment",
         system: {
           quantity: inv.quantity ?? 1,
           ...(inv.is_equipped && { equipped: true }),
         },
-      });
+      };
+      const metalKey = VgbndBrowserDialog.#mapMetalKey(inv.material);
+      if (metalKey) itemData.system.metal = metalKey;
+      const hasRelicPowers = Array.isArray(inv.relic_powers) && inv.relic_powers.length > 0;
+      if (hasRelicPowers) {
+        itemData.flags ??= {};
+        itemData.flags["vgbnd-importer"] = {
+          pendingRelic: {
+            relic_powers: inv.relic_powers,
+            material:     inv.material ?? null,
+          },
+        };
+      }
+      items.push(itemData);
     }
 
     // Portrait — upload to Foundry's file system so it's a proper URL, not a db blob
@@ -573,6 +589,103 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     }
 
     return { name: fs.name ?? "Unknown", type: "character", img, items, system, subjectTexture };
+  }
+
+  // ── Relic forge integration (vagabond-crawler) ──────────────────────────────
+
+  /**
+   * Map vgbnd.app's material string to vagabond-crawler's `system.metal` key.
+   * Returns null if no mapping is known (item gets no metal — base name only).
+   */
+  static #mapMetalKey(material) {
+    if (!material || typeof material !== "string") return null;
+    const m = material.toLowerCase().trim();
+    const map = {
+      "silver":     "silver",
+      "mythral":    "mythral",
+      "mithral":    "mythral",
+      "orichalum":  "orichalcum",
+      "orichalcum": "orichalcum",
+      "adamant":    "adamant",
+      "adamantine": "adamant",
+      "cold-iron":  "coldIron",
+      "cold iron":  "coldIron",
+      "magical":    "magical",
+    };
+    return map[m] ?? null;
+  }
+
+  /**
+   * Normalize a vgbnd.app relic-power id to the format vagabond-crawler uses.
+   * vgbnd.app: `strike-i`, `strike-ii`, `strike-iii`
+   * crawler:   `strike-1`, `strike-2`, `strike-3`
+   */
+  static #normalizeRelicPowerId(id) {
+    if (!id || typeof id !== "string") return id;
+    return id.replace(/-(i{1,3})$/i, (_, roman) => {
+      const a = { i: "1", ii: "2", iii: "3" }[roman.toLowerCase()];
+      return a ? `-${a}` : `-${roman}`;
+    });
+  }
+
+  /**
+   * Resolve a single vgbnd.app relic_power entry to a vagabond-crawler power
+   * definition. Handles three cases:
+   *   - Standard ids → direct lookup after roman→arabic normalization
+   *   - id === 'special' → fuzzy match on display_name against power.name
+   *   - Unknown → returns null, caller logs and skips
+   */
+  static #resolveRelicPower(rawPower, getRelicPower, RELIC_POWERS) {
+    if (!rawPower) return null;
+    if (rawPower.id && rawPower.id !== "special") {
+      const normId = VgbndBrowserDialog.#normalizeRelicPowerId(rawPower.id);
+      const found = getRelicPower(normId);
+      if (found) return { ...found, _userInput: "" };
+      console.warn(`vgbnd-importer | relic id "${rawPower.id}" → "${normId}" not found in RELIC_POWERS`);
+      return null;
+    }
+    // Custom 'special' powers — fuzzy match on display_name
+    const display = (rawPower.display_name ?? rawPower.vars?.display_name ?? "").trim();
+    if (!display) return null;
+    const needle = display.toLowerCase();
+    const match = RELIC_POWERS.find(p => p.name.toLowerCase().includes(needle))
+              ?? RELIC_POWERS.find(p => needle.includes(p.name.toLowerCase()));
+    if (match) return { ...match, _userInput: "" };
+    console.warn(`vgbnd-importer | relic special "${display}" — no fuzzy match`);
+    return null;
+  }
+
+  /**
+   * After actor creation, scan its items for the pendingRelic flag (set by
+   * #fromFirestore) and forge each one via vagabond-crawler's public API.
+   * Silently no-ops if vagabond-crawler isn't active — items remain unforged
+   * but keep the flag, so a future install + retry could pick them up.
+   */
+  static async #applyRelicForge(actor) {
+    const crawler = game.modules.get("vagabond-crawler");
+    if (!crawler?.active || !crawler.api?.forgeItem) return;
+    const { forgeItem, getRelicPower, RELIC_POWERS } = crawler.api;
+
+    const pendingItems = actor.items.filter(i => i.getFlag("vgbnd-importer", "pendingRelic"));
+    if (!pendingItems.length) return;
+
+    for (const item of pendingItems) {
+      const pending = item.getFlag("vgbnd-importer", "pendingRelic");
+      const rawPowers = pending?.relic_powers ?? [];
+      const powers = rawPowers
+        .map(rp => VgbndBrowserDialog.#resolveRelicPower(rp, getRelicPower, RELIC_POWERS))
+        .filter(Boolean);
+      if (!powers.length) {
+        await item.unsetFlag("vgbnd-importer", "pendingRelic");
+        continue;
+      }
+      try {
+        await forgeItem(item, powers);
+      } catch (err) {
+        console.warn(`vgbnd-importer | forgeItem failed for "${item.name}":`, err.message);
+      }
+      await item.unsetFlag("vgbnd-importer", "pendingRelic");
+    }
   }
 
   static async #uploadPortrait(charName, base64) {
@@ -684,6 +797,10 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
         if (fsData) await item.setFlag("vgbnd-importer", "firestoreData", fsData);
       }
     }
+
+    // Forge any items tagged with pendingRelic (from #fromFirestore). Silently
+    // no-ops if vagabond-crawler isn't active.
+    await VgbndBrowserDialog.#applyRelicForge(actor);
 
     if (unresolved.length) {
       const dlg = new VgbndUnresolvedDialog(actor, unresolved);

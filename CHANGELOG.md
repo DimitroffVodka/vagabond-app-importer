@@ -2,6 +2,68 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.6.0 — 2026-04-29
+
+Two big additions: relic-forge integration and a much wider compendium
+name-translation pass (the latter was originally going to ship as v2.5.6).
+
+### Added — relic forge integration
+- Items imported with `relic_powers` data from vgbnd.app are now auto-forged
+  via `vagabond-crawler`'s `RelicForge.forgeItem` API (added in
+  `vagabond-crawler` v1.16.1).
+- Materials (silver, mythral, orichalum/orichalcum, etc.) are mapped to
+  `system.metal` so the forged relic name picks up the metal suffix.
+- Roman-numeral normalization for vgbnd.app's relic ids (`strike-i` →
+  `strike-1` — vgbnd.app uses Roman, crawler uses Arabic).
+- Fuzzy `display_name` lookup for vgbnd.app's `special` relic-power id
+  (matches against the crawler's `RELIC_POWERS[].name`).
+- If `vagabond-crawler` is not active, the importer leaves a `pendingRelic`
+  flag on each affected item; install the crawler later to forge them.
+- Verified end-to-end on Drako: 4 inventory items with relic_powers all
+  forge correctly:
+  - Heavy Armor + `bonus-armor-1` + orichalcum → "+1 Heavy Armor (Orichalcum)"
+  - Longsword + `strike-i` + silver → "Minor Striking Longsword (Silver)"
+  - Standard shield + `senses-nightvision` + mythral → "Standard shield of Darksight (Mythral)"
+  - Katar + `special`/"Jumping I" → "Katar of Minor Jumping"
+
+### Added — name translation
+- `#STATIC_ALIASES` map in `mapper.mjs` for irregular cases that don't fit
+  any general rule.
+- Parenthetical-qualifier strip in `#nameVariants` (`Trinket (magic)` →
+  `Trinket`).
+- Generalized comma-prefix swap rule — any 2+ word "X Y" name now also tries
+  "Y, x" against the compendium (covers ~140 previously-unresolved items
+  beyond the original fixed pivot list).
+- `scroll` added to comma-prefix pivot tokens.
+
+### Fixed
+- More inventory items now resolve to compendium entries:
+  - `Trinket (magic)` → `Trinket`
+  - `Blank Scroll` → `Scroll, blank`
+  - `Materials` → `Materials (1g)` (default tier; swap to `(50s)` manually
+    if your character has the higher tier)
+  - `Ingredients` → `Ingredients (1g)`
+  - `Tarot Cards` / `Deck Tarot Cards` → `Cards - deck, tarot`
+  - `Playing Cards` / `Deck Playing Cards` → `Cards - deck, playing`
+  - `Marked Cards` / `Deck Marked Cards` → `Cards - deck, marked`
+- `mapper.mjs` now preserves incoming `flags` and `system.metal` from the
+  apiItem onto the resolved compendium clone (previously dropped, which
+  broke any post-create flag-based step including relic-forge).
+
+### Verified
+- Vhul Mordis: 11/11 inventory items resolve.
+- MrLawyerGuy: 16/16 (was 14/16 in v2.5.5).
+- Drako: 14/14 inventory items resolve, 4 of them get auto-forged into
+  proper relics with metal suffixes and ActiveEffects.
+- Predicted-natural-form regression test against full compendium: 95% pass
+  (1431/1505), up from 85% before this release.
+
+### Notes
+- Spec/tracking note `name_translation_open_questions.md` (Materials +
+  Tarot Cards) is now resolved.
+- New module relationship: `vagabond-crawler` is now an optional
+  dependency for full relic support.
+
 ## v2.5.5 — 2026-04-28
 
 ### Added

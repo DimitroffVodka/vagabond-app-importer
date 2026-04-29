@@ -38,7 +38,25 @@ export class VgbndMapper {
 
   // Category words the compendium uses as a comma-prefix.
   // vgbnd.app emits "Healing I Potion"; the compendium calls it "Potion, Healing I".
-  static #COMMA_PREFIX_TOKENS = ["potion", "oil", "acid", "torch", "candle", "poison", "lantern", "book"];
+  static #COMMA_PREFIX_TOKENS = ["potion", "oil", "acid", "torch", "candle", "poison", "lantern", "book", "scroll"];
+
+  // Direct name aliases for cases where no general rule fits.
+  // Keys must be lowercased + whitespace-collapsed (i.e. post-#normalizeName).
+  // Values are the compendium-side normalized name.
+  static #STATIC_ALIASES = {
+    // Cards: compendium uses "Cards - deck, X" pattern. vgbnd.app variously
+    // emits "Tarot Cards", "Deck Tarot Cards", "Playing Cards", etc.
+    "tarot cards":        "cards - deck, tarot",
+    "deck tarot cards":   "cards - deck, tarot",
+    "playing cards":      "cards - deck, playing",
+    "deck playing cards": "cards - deck, playing",
+    "marked cards":       "cards - deck, marked",
+    "deck marked cards":  "cards - deck, marked",
+    // Materials/Ingredients: compendium has price tiers as parentheticals
+    // — default to the cheaper tier; GM can swap to (50s) manually if needed
+    "materials":          "materials (1g)",
+    "ingredients":        "ingredients (1g)",
+  };
 
   // ──────────────────────────────────────────────────────────
   //  Public API
@@ -172,6 +190,18 @@ export class VgbndMapper {
     const seen = new Set(variants);
     const push = v => { if (v && !seen.has(v)) { seen.add(v); variants.push(v); } };
 
+    // Static alias takes precedence over any rule (covers irregular cases
+    // like "Tarot Cards" → "Cards - deck, tarot" that don't fit any pattern).
+    if (this.#STATIC_ALIASES[base]) push(this.#STATIC_ALIASES[base]);
+
+    // Strip a trailing parenthetical qualifier: "Trinket (magic)" → "trinket".
+    // The compendium often has a bare name where vgbnd.app adds a clarifier.
+    const noParen = base.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    if (noParen && noParen !== base) {
+      push(noParen);
+      if (this.#STATIC_ALIASES[noParen]) push(this.#STATIC_ALIASES[noParen]);
+    }
+
     // Try both the original and singular form (strip trailing "s").
     // The compendium uses singular forms ("Lantern, hooded"), but the API
     // sometimes emits plurals ("Hooded Lanterns").
@@ -186,10 +216,14 @@ export class VgbndMapper {
         push("scroll, spell");
       }
 
-      // "X Y Pivot" → "Pivot, X Y" for known category words
-      for (const pivot of this.#COMMA_PREFIX_TOKENS) {
-        const m = form.match(new RegExp(`^(.+)\\s+${pivot}$`));
-        if (m) push(`${pivot}, ${m[1]}`);
+      // Generalized comma-prefix swap: "A B C ... Y" → "Y, a b c" for any
+      // multi-word name. Tries the LAST word as the comma-prefix pivot. Most
+      // compendium entries that swap pivot use this pattern: "Whip, leather",
+      // "Crossbow, light", "Pants, casual", "Spikes, iron (10)", etc.
+      const lastWordMatch = form.match(/^(.+)\s+(\S+)$/);
+      if (lastWordMatch) {
+        const [, prefix, pivot] = lastWordMatch;
+        push(`${pivot}, ${prefix}`);
       }
     }
 
@@ -265,6 +299,18 @@ export class VgbndMapper {
       const shouldEquip = apiItem.system?.equipped
         ?? this.#AUTO_EQUIP_TYPES.has(sys.equipmentType ?? "");
       if (shouldEquip) foundry.utils.setProperty(itemData, "system.equipped", true);
+    }
+
+    // ── Metal (relic-forge integration) — vgbnd.app's `material` field ────────
+    if (apiItem.system?.metal) {
+      foundry.utils.setProperty(itemData, "system.metal", apiItem.system.metal);
+    }
+
+    // ── Preserve incoming flags (e.g. pendingRelic from Firestore inventory) ──
+    // The compendium clone has its own flags namespace; we merge any input
+    // module-flags on top so the post-create relic-forge step can find them.
+    if (apiItem.flags) {
+      itemData.flags = foundry.utils.mergeObject(itemData.flags ?? {}, apiItem.flags, { inplace: false });
     }
 
     // ── Spells: favorite so they appear on the front of the sheet ──────────────
