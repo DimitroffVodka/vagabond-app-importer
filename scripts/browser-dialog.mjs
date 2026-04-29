@@ -363,6 +363,30 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
 
     if (importBtn) importBtn.disabled = true;
     if (statusEl)  statusEl.textContent = game.i18n.localize("VGBND.Fetching");
+
+    // Primary path: read the full Firestore document (auth or anonymous).
+    // The public ?format=foundry endpoint strips portraits and spells; the
+    // Firestore document keeps both. Anonymous sign-up requires no user
+    // account and is enough to read public characters.
+    try {
+      let tok = await VgbndFirebase.getToken();
+      if (!tok) tok = await VgbndFirebase.signInAnonymously();
+      const fsData = await VgbndFirebase.getCharacter(tok.idToken, uuid);
+      if (fsData.ancestry || fsData.class || fsData.inventory?.length) {
+        const raw = await VgbndBrowserDialog.#fromFirestore(uuid, fsData);
+        if (statusEl) statusEl.textContent = game.i18n.localize("VGBND.Importing");
+        await VgbndBrowserDialog.#createActor(raw, uuid, fsData.selected_perks ?? []);
+        if (statusEl) statusEl.textContent = "";
+        if (importBtn) importBtn.disabled = false;
+        return;
+      }
+    } catch (err) {
+      // 403 (private character), network, or other — fall through to
+      // ?format=foundry which doesn't need auth.
+      console.warn("vgbnd-importer | Firestore URL import failed, falling back to ?format=foundry:", err.message);
+    }
+
+    // Fallback: ?format=foundry (no portrait, but spells get merged from native).
     try {
       const apiUrl     = `https://www.vgbnd.app/api/characters/${uuid}?format=foundry`;
       const useProxy   = game.settings.get("vgbnd-importer", "use-cors-proxy");
@@ -371,8 +395,6 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       const res = await fetch(fetchUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json();
-      // ?format=foundry strips spells — fetch native shape and merge spell names
-      // so the mapper can resolve them against the vagabond.spells compendium.
       const spellNames = await VgbndBrowserDialog.#fetchSpellNames(uuid, useProxy, proxyPref);
       if (spellNames.length) {
         raw.items = raw.items ?? [];

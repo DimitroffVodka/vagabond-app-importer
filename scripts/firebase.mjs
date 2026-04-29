@@ -25,6 +25,24 @@ function fsFields(fields) {
 export class VgbndFirebase {
   static #SETTING = "firebase-session";
 
+  /** Anonymous Firebase sign-up — returns a transient { idToken, uid } without
+   *  storing a session. Used by URL-tab imports so we can read the full
+   *  Firestore document of public characters (which includes the portrait
+   *  and spells, both of which the public ?format=foundry endpoint strips). */
+  static async signInAnonymously() {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ returnSecureToken: true }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
+    return { idToken: data.idToken, uid: data.localId };
+  }
+
   /** Email + password sign-in; stores session in client game settings. */
   static async signIn(email, password) {
     const res  = await fetch(

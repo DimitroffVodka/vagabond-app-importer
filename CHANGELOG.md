@@ -2,6 +2,33 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.5.5 — 2026-04-28
+
+### Added
+- **Portraits import via the URL tab.** vgbnd.app's public `?format=foundry`
+  endpoint strips both portraits (`character_image_base64`) and spells from
+  the response; the underlying Firestore document keeps both. The URL handler
+  now anonymously signs up a Firebase user (no account required) and reads
+  the Firestore document directly — same path the sign-in import already
+  uses. URL imports now produce actors with portraits, spells, and Dynamic
+  Token Ring textures (when enabled), reaching parity with sign-in imports.
+- New `VgbndFirebase.signInAnonymously()` — transient token, never persisted,
+  used only for the duration of one URL import.
+
+### Changed
+- URL-tab handler architecture: Firestore (auth or anonymous) is now the
+  primary path; `?format=foundry` is the fallback for non-public characters
+  or other Firestore failures. Path uses the existing `#fromFirestore`
+  transform, so spells, portraits, stats, perks, inventory, and DTR support
+  all come through the same code that signed-in imports use.
+
+### Notes
+- Performance: signed-in URL import ~480 ms, anonymous ~600 ms (one extra
+  request to mint the anon token). Within typical character-fetch latency.
+- Private characters (`is_public: false`) still hit the foundry-shape
+  fallback and miss portraits — no anonymous read access on those, by design
+  on vgbnd.app's side.
+
 ## v2.5.4 — 2026-04-28
 
 ### Fixed
