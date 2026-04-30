@@ -145,23 +145,32 @@ Hooks.on("renderActorDirectory", (_app, html, _data) => {
 });
 
 // ── Actor sheet header button: link/refresh from vgbnd.app ───────────────────
-Hooks.on("renderActorSheet", (app, html, _data) => {
-  if (!game.user.isGM) return;
-  const actor = app.actor;
-  if (!actor || actor.type !== "character") return;
+//
+// Foundry V13 actor sheets can be either ApplicationV1 (renderActorSheet hook)
+// or ApplicationV2 (renderApplicationV2). We listen to both and dedupe by
+// class on the inserted element.
 
-  const root = html instanceof HTMLElement ? html : html[0];
-  if (!root) return;
+function _vgbndInjectActorHeaderButton(app, html) {
+  if (!game.user?.isGM) return;
+  const actor = app?.actor ?? app?.object;
+  if (!actor || actor.documentName !== "Actor" || actor.type !== "character") return;
 
-  // Find the header element. Try v2 ApplicationV2 selectors first, then v1.
-  const titleBar = root.closest(".window-app")?.querySelector(".window-header")
-                ?? root.querySelector(".window-header");
-  if (!titleBar) return;
-  if (titleBar.querySelector(".vgbnd-link-btn")) return; // already added
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  // Walk up to the window root to find the header (v1 + v2 both use .window-header).
+  const windowRoot = root?.closest?.(".app, .application") ?? root;
+  const titleBar = windowRoot?.querySelector?.(".window-header")
+                ?? document.querySelector(`.app[data-appid="${app.appId}"] .window-header`)
+                ?? document.querySelector(`#${app.id} .window-header`);
+  if (!titleBar) {
+    console.warn(`vgbnd-importer | Header button: no .window-header found for actor "${actor.name}"`);
+    return;
+  }
+  if (titleBar.querySelector(".vgbnd-link-btn")) return; // already inserted
 
   const linked = !!actor.getFlag("vgbnd-importer", "firestoreId");
   const btn = document.createElement("a");
-  btn.classList.add("header-control", "vgbnd-link-btn");
+  btn.classList.add("header-control", "icon", "vgbnd-link-btn");
+  btn.style.cursor = "pointer";
   btn.dataset.tooltip = linked
     ? game.i18n.localize("VGBND.ActorRefreshTooltip")
     : game.i18n.localize("VGBND.ActorLinkTooltip");
@@ -185,11 +194,21 @@ Hooks.on("renderActorSheet", (app, html, _data) => {
     }
   });
 
-  // Try to insert before the close button so it sits to the LEFT of the X.
-  const closeBtn = titleBar.querySelector("[data-action='close'], .close, .header-control:last-child");
+  // Insert before the close button so it sits to the LEFT of the X.
+  const closeBtn = titleBar.querySelector("[data-action='close'], .close, button.header-control:last-child");
   if (closeBtn?.parentElement) {
     closeBtn.parentElement.insertBefore(btn, closeBtn);
   } else {
     titleBar.appendChild(btn);
+  }
+  console.log(`vgbnd-importer | Header button inserted for actor "${actor.name}" (linked=${linked})`);
+}
+
+Hooks.on("renderActorSheet", (app, html) => _vgbndInjectActorHeaderButton(app, html));
+Hooks.on("renderActorSheetV2", (app, html) => _vgbndInjectActorHeaderButton(app, html));
+// Some V13 system sheets fire only the generic ApplicationV2 hook
+Hooks.on("renderApplicationV2", (app, html) => {
+  if (app?.constructor?.name?.includes?.("ActorSheet") || app?.actor?.documentName === "Actor") {
+    _vgbndInjectActorHeaderButton(app, html);
   }
 });

@@ -2,6 +2,20 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.7.1 — 2026-04-29
+
+### Fixed
+- The link/refresh header button from v2.7.0 didn't appear on Vagabond's
+  character sheet. Vagabond v5+ uses an ApplicationV2-based sheet
+  (`VagabondCharacterSheet → ActorSheetV2 → DocumentSheetV2 → ApplicationV2`),
+  but v2.7.0 only listened to the legacy `renderActorSheet` hook which
+  doesn't fire reliably for V2 sheets. The hook is now wired into all three
+  render hooks (`renderActorSheet`, `renderActorSheetV2`,
+  `renderApplicationV2` filtered to actor sheets), with a single dedupe
+  guard so the button only inserts once per sheet.
+- Added a console log on insertion (`vgbnd-importer | Header button
+  inserted for actor "X"`) so you can verify it's working.
+
 ## v2.7.0 — 2026-04-29
 
 ### Added
