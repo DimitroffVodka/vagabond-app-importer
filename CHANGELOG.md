@@ -2,6 +2,28 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.7.0 — 2026-04-29
+
+### Added
+- **Link & Refresh existing actors.** Each character actor sheet now has a
+  link icon in its header. If the actor isn't yet linked to a vgbnd.app
+  character, clicking it prompts for a URL or UUID — the actor is linked
+  and refreshed in one motion. If already linked, clicking refreshes the
+  actor with current vgbnd.app data.
+- **Refresh = nuclear replacement** of all items + system fields (stats,
+  currency, HP/mana/luck, level, xp). Portrait, prototype-token
+  customizations, sheet position, and ownership are all preserved. Foundry-
+  only items added by hand on the actor will be deleted on refresh —
+  documented limitation; vgbnd.app is treated as the source of truth.
+- New public method `VgbndBrowserDialog.syncFromVgbnd(actor, optionalUrl)`
+  for macro / scripting use.
+
+### Notes
+- The link button shows a chain icon when not linked, a refresh arrow when
+  linked. Tooltip explains the action.
+- Verified end-to-end: relic-forge step runs after refresh, so re-imported
+  Drako gets all relics re-forged to current state.
+
 ## v2.6.2 — 2026-04-29
 
 ### Fixed

@@ -20,6 +20,9 @@
   "VGBND.SidebarBrowseButton": "Browse Vagabond Tag Along",
   "VGBND.BrowserTitle": "Vagabond Character Browser",
 
+  "VGBND.ActorLinkTooltip": "Link this actor to a vgbnd.app character and pull current data",
+  "VGBND.ActorRefreshTooltip": "Refresh this actor with current vgbnd.app data (replaces all items + system fields)",
+
   "VGBND.Email": "Email",
   "VGBND.Password": "Password",
   "VGBND.SignIn": "Sign In",

@@ -603,6 +603,153 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     return { name: fs.name ?? "Unknown", type: "character", img, items, system, subjectTexture };
   }
 
+  // ── Link & refresh (existing actor → vgbnd.app) ─────────────────────────────
+
+  /**
+   * Public entry point for the actor-sheet "Sync from vgbnd.app" button and
+   * the Browser Dialog's "Refresh" action on already-linked characters.
+   *
+   * If the actor already has a firestoreId flag, fetches fresh data and runs
+   * a nuclear refresh (delete all items, recreate from vgbnd.app, update
+   * system fields).
+   *
+   * If not yet linked, prompts the user for a URL or UUID, sets the flag,
+   * and refreshes in one motion.
+   *
+   * @param {Actor} actor                    Foundry character actor
+   * @param {string} [urlOrUuidOverride]     If provided, skips the prompt
+   *                                         (used by the dialog's import flow
+   *                                         when the user picked a card that
+   *                                         matches an existing actor).
+   */
+  static async syncFromVgbnd(actor, urlOrUuidOverride = null) {
+    if (!actor || actor.type !== "character") {
+      ui.notifications.warn("vgbnd-importer | Sync requires a character actor.");
+      return;
+    }
+
+    const existingFid = actor.getFlag("vgbnd-importer", "firestoreId");
+    let uuid = existingFid ?? null;
+
+    // Determine the UUID to fetch. Priority: explicit override → existing flag → prompt.
+    if (urlOrUuidOverride) {
+      uuid = VgbndBrowserDialog.extractUUID(urlOrUuidOverride);
+      if (!uuid) {
+        ui.notifications.error("vgbnd-importer | Could not extract a valid UUID from the input.");
+        return;
+      }
+    } else if (!uuid) {
+      const input = await VgbndBrowserDialog.#promptForUuid();
+      if (!input) return;
+      uuid = VgbndBrowserDialog.extractUUID(input);
+      if (!uuid) {
+        ui.notifications.error("vgbnd-importer | Could not extract a valid UUID from the input.");
+        return;
+      }
+    }
+
+    // Fetch fresh data (auth or anon)
+    let fsData;
+    try {
+      const tok = (await VgbndFirebase.getToken()) ?? (await VgbndFirebase.signInAnonymously());
+      fsData = await VgbndFirebase.getCharacter(tok.idToken, uuid);
+    } catch (err) {
+      ui.notifications.error(`vgbnd-importer | Could not fetch character: ${err.message}`);
+      return;
+    }
+    if (!fsData?.ancestry && !fsData?.class && !fsData?.inventory?.length) {
+      ui.notifications.error("vgbnd-importer | Character data is empty or inaccessible.");
+      return;
+    }
+
+    // Link the actor (sets firestoreId for future refreshes)
+    if (existingFid !== uuid) {
+      await actor.setFlag("vgbnd-importer", "firestoreId", uuid);
+    }
+
+    await VgbndBrowserDialog.#refreshActor(actor, uuid, fsData);
+  }
+
+  /** Open a small DialogV2 prompting for a URL or UUID. Returns the trimmed
+   *  input string, or null if the user cancelled. */
+  static async #promptForUuid() {
+    const placeholder = "https://www.vgbnd.app/character/... or 38008c0c-555c-...";
+    const content = `<p style="margin: 0 0 8px;">Paste a vgbnd.app URL or character UUID:</p>
+                     <input name="input" type="text" placeholder="${placeholder}"
+                            style="width: 100%" autofocus />`;
+    try {
+      const result = await foundry.applications.api.DialogV2.prompt({
+        window: { title: "Link to vgbnd.app" },
+        content,
+        ok: { label: "Link & Refresh", callback: (_e, btn) => btn.form.elements.input?.value?.trim() ?? "" },
+        rejectClose: false,
+      });
+      return result || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Nuclear refresh: replace all of the actor's items with what vgbnd.app
+   * currently has, update system fields (stats, currency, HP/mana/luck/level/xp),
+   * re-attach perk firestoreData, and re-apply the relic forge step.
+   *
+   * Does NOT touch the actor's portrait, prototype-token customizations,
+   * sheet position, ownership, or any non-vgbnd-managed flags.
+   */
+  static async #refreshActor(actor, firestoreId, fsData) {
+    // Build the fresh raw payload using the same path imports use.
+    const raw = await VgbndBrowserDialog.#fromFirestore(firestoreId, fsData);
+    let actorData, unresolved;
+    try {
+      ({ actorData, unresolved } = await VgbndMapper.toActor(raw));
+    } catch (err) {
+      ui.notifications.error(`vgbnd-importer | Refresh failed during mapping: ${err.message}`);
+      return;
+    }
+
+    // 1. Delete every existing item on the actor (nuclear). User-added
+    //    Foundry-only items will be lost on refresh — documented behaviour.
+    const existingIds = actor.items.map(i => i.id);
+    if (existingIds.length) {
+      await actor.deleteEmbeddedDocuments("Item", existingIds);
+    }
+
+    // 2. Update system + name. We deliberately skip img + prototypeToken so
+    //    the user's customizations stick.
+    await actor.update({
+      "name":   actorData.name,
+      "system": actorData.system,
+    });
+
+    // 3. Recreate items from fresh data
+    if (actorData.items?.length) {
+      await actor.createEmbeddedDocuments("Item", actorData.items);
+    }
+
+    // 4. Re-attach Firestore perk metadata for round-trip sync
+    if (fsData.selected_perks?.length) {
+      const perkMap   = new Map(fsData.selected_perks.map(p => [p.name?.toLowerCase(), p]));
+      const perkItems = actor.items.filter(i => i.type === "perk");
+      for (const item of perkItems) {
+        const fsPerk = perkMap.get(item.name.toLowerCase());
+        if (fsPerk) await item.setFlag("vgbnd-importer", "firestoreData", fsPerk);
+      }
+    }
+
+    // 5. Apply relic forge to any items with pendingRelic flag
+    await VgbndBrowserDialog.#applyRelicForge(actor);
+
+    // 6. Surface unresolved (compendium-miss) items if any
+    if (unresolved?.length) {
+      const dlg = new VgbndUnresolvedDialog(actor, unresolved);
+      dlg.render(true);
+    }
+
+    ui.notifications.info(`vgbnd-importer | Refreshed ${actor.name} from vgbnd.app.`);
+  }
+
   // ── Homebrew resolution (class / ancestry / perk by UUID) ───────────────────
 
   /**

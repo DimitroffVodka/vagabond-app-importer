@@ -143,3 +143,53 @@ Hooks.on("renderActorDirectory", (_app, html, _data) => {
   target.prepend(browseBtn);
   browseBtn.before(syncBtn);
 });
+
+// ── Actor sheet header button: link/refresh from vgbnd.app ───────────────────
+Hooks.on("renderActorSheet", (app, html, _data) => {
+  if (!game.user.isGM) return;
+  const actor = app.actor;
+  if (!actor || actor.type !== "character") return;
+
+  const root = html instanceof HTMLElement ? html : html[0];
+  if (!root) return;
+
+  // Find the header element. Try v2 ApplicationV2 selectors first, then v1.
+  const titleBar = root.closest(".window-app")?.querySelector(".window-header")
+                ?? root.querySelector(".window-header");
+  if (!titleBar) return;
+  if (titleBar.querySelector(".vgbnd-link-btn")) return; // already added
+
+  const linked = !!actor.getFlag("vgbnd-importer", "firestoreId");
+  const btn = document.createElement("a");
+  btn.classList.add("header-control", "vgbnd-link-btn");
+  btn.dataset.tooltip = linked
+    ? game.i18n.localize("VGBND.ActorRefreshTooltip")
+    : game.i18n.localize("VGBND.ActorLinkTooltip");
+  btn.innerHTML = linked
+    ? `<i class="fa-solid fa-rotate-right"></i>`
+    : `<i class="fa-solid fa-link"></i>`;
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    btn.classList.add("disabled");
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+    try {
+      await VgbndBrowserDialog.syncFromVgbnd(actor);
+    } catch (err) {
+      console.warn("vgbnd-importer | Sync failed:", err);
+      ui.notifications.error(`vgbnd-importer | Sync failed: ${err.message}`);
+    } finally {
+      btn.innerHTML = orig;
+      btn.classList.remove("disabled");
+    }
+  });
+
+  // Try to insert before the close button so it sits to the LEFT of the X.
+  const closeBtn = titleBar.querySelector("[data-action='close'], .close, .header-control:last-child");
+  if (closeBtn?.parentElement) {
+    closeBtn.parentElement.insertBefore(btn, closeBtn);
+  } else {
+    titleBar.appendChild(btn);
+  }
+});
