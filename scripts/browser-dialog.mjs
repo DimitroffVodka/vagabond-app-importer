@@ -485,9 +485,15 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     // console.log("vgbnd-importer | raw Firestore document:", JSON.parse(JSON.stringify(fs)));
     const items = [];
 
-    // Ancestry & class resolved by name from compendiums
-    if (fs.ancestry) items.push({ name: VgbndBrowserDialog.#titleCase(fs.ancestry), type: "ancestry" });
-    if (fs.class)    items.push({ name: VgbndBrowserDialog.#titleCase(fs.class),    type: "class"    });
+    // Ancestry & class resolved by name from compendiums.
+    // Homebrew class/ancestry are stored as UUIDs referencing homebrew_content;
+    // resolve those to the human name so the mapper can find them in the
+    // appropriate compendium (typically vagabond-character-enhancer.vce-*).
+    const ancestryName = await VgbndBrowserDialog.#resolveHomebrewName(fs.ancestry, "ancestry");
+    if (ancestryName) items.push({ name: ancestryName, type: "ancestry" });
+
+    const className = await VgbndBrowserDialog.#resolveHomebrewName(fs.class, "class");
+    if (className) items.push({ name: className, type: "class" });
 
     // Perks (includes ancestry + class source perks)
     for (const p of (fs.selected_perks ?? [])) {
@@ -589,6 +595,47 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     }
 
     return { name: fs.name ?? "Unknown", type: "character", img, items, system, subjectTexture };
+  }
+
+  // ── Homebrew resolution (class / ancestry / perk by UUID) ───────────────────
+
+  /**
+   * vgbnd.app stores homebrew classes/ancestries on characters as their
+   * Firestore document UUID (e.g. "5bb32641-2134-4bf8-a91f-e7468c1ed4e4")
+   * instead of the stable slug ("sorcerer"). Detect that pattern and resolve
+   * to the human-readable name from `homebrew_content/<uuid>` so the mapper
+   * can find it in vagabond-character-enhancer.vce-* compendiums (or
+   * wherever the matching item lives).
+   *
+   * Falls back to the title-cased input if it's a regular slug or if the
+   * homebrew fetch fails — that mirrors the previous behaviour.
+   */
+  static async #resolveHomebrewName(value, _type) {
+    if (!value) return null;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(value)) return VgbndBrowserDialog.#titleCase(value);
+    // It's a UUID → fetch the homebrew document
+    try {
+      const tok = (await VgbndFirebase.getToken()) ?? (await VgbndFirebase.signInAnonymously());
+      const FS_BASE = "https://firestore.googleapis.com/v1/projects/vagabond-tag-along/databases/(default)/documents";
+      const res = await fetch(`${FS_BASE}/homebrew_content/${value}`, {
+        headers: { "Authorization": `Bearer ${tok.idToken}` },
+      });
+      if (!res.ok) {
+        console.warn(`vgbnd-importer | homebrew_content/${value} → HTTP ${res.status}; falling back to UUID`);
+        return value;
+      }
+      const data = await res.json();
+      const name = data?.fields?.data?.mapValue?.fields?.name?.stringValue
+                ?? data?.fields?.collection?.stringValue
+                ?? null;
+      if (name) return name;
+      console.warn(`vgbnd-importer | homebrew_content/${value} has no data.name; falling back to UUID`);
+      return value;
+    } catch (err) {
+      console.warn(`vgbnd-importer | homebrew lookup failed for ${value}:`, err.message);
+      return value;
+    }
   }
 
   // ── Relic forge integration (vagabond-crawler) ──────────────────────────────

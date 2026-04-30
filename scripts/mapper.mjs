@@ -17,11 +17,15 @@ export class VgbndMapper {
   //  Compendium config
   // ──────────────────────────────────────────────────────────
 
-  static #SINGLE_PACK = {
-    ancestry: "vagabond.ancestries",
-    class:    "vagabond.classes",
-    perk:     "vagabond.perks",
-    spell:    "vagabond.spells",
+  // Per type, an ordered list of packs to try. The official `vagabond.*` pack
+  // is consulted first; if the item isn't there (homebrew classes/ancestries),
+  // we fall through to `vagabond-character-enhancer.vce-*`. Spells only have
+  // one pack today.
+  static #PACKS_BY_TYPE = {
+    ancestry: ["vagabond.ancestries", "vagabond-character-enhancer.vce-ancestries"],
+    class:    ["vagabond.classes",    "vagabond-character-enhancer.vce-classes"],
+    perk:     ["vagabond.perks",      "vagabond-character-enhancer.vce-perks"],
+    spell:    ["vagabond.spells"],
   };
 
   // Tried in order for type "equipment"
@@ -231,9 +235,9 @@ export class VgbndMapper {
   }
 
   static #packsForType(type) {
-    if (type in this.#SINGLE_PACK) return [this.#SINGLE_PACK[type]];
-    if (type === "equipment")      return this.#EQUIPMENT_PACKS;
-    return [...Object.values(this.#SINGLE_PACK), ...this.#EQUIPMENT_PACKS];
+    if (type in this.#PACKS_BY_TYPE) return this.#PACKS_BY_TYPE[type];
+    if (type === "equipment")        return this.#EQUIPMENT_PACKS;
+    return [...Object.values(this.#PACKS_BY_TYPE).flat(), ...this.#EQUIPMENT_PACKS];
   }
 
   /**

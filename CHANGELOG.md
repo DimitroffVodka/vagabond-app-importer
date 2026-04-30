@@ -2,6 +2,27 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.6.1 — 2026-04-29
+
+### Fixed
+- **Homebrew classes/ancestries now import correctly.** vgbnd.app stores
+  homebrew classes/ancestries on characters as the raw Firestore document
+  UUID (e.g. `"5bb32641-2134-4bf8-a91f-e7468c1ed4e4"`) instead of a stable
+  slug. The importer now detects UUID values, fetches `homebrew_content/<uuid>`
+  via Firestore (auth or anonymous), and uses `data.name` as the item name
+  for compendium lookup. Previously these surfaced as unresolved items.
+
+### Added
+- Mapper now searches `vagabond-character-enhancer.vce-classes`,
+  `vce-ancestries`, and `vce-perks` as fallbacks after the official
+  `vagabond.*` packs. So homebrew names that the user has populated in
+  vce-* (Summoner, Dragoon, Jester, Monk, Psychic, Samurai for classes;
+  the Spellbook 1 Preview ancestries) all resolve cleanly.
+
+### Verified
+- MrLawyerGuy (homebrew Summoner) imports with class "Summoner" attached
+  from `vce-classes`, plus all perks, spells, and equipment.
+
 ## v2.6.0 — 2026-04-29
 
 Two big additions: relic-forge integration and a much wider compendium
