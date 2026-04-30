@@ -540,14 +540,20 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const img = await VgbndBrowserDialog.#uploadPortrait(charName, fs.character_image_base64)
               ?? "icons/svg/mystery-man.svg";
 
-    // Stats: assignedStats + levelStats bonuses (e.g. stat points gained on level-up)
+    // Stats: assignedStats + levelStats bonuses + strongPotentialStat
+    //   - levelStats: stat points gained on level-up
+    //   - strongPotentialStat: Human ancestry's "Strong Potential" trait grants
+    //     +1 to whichever stat the player chose. vgbnd.app stores the chosen
+    //     stat name as a string; non-Human characters just don't have this set.
     const statsObj = {};
     const src      = fs.assignedStats ?? {};
     const lvlStats = fs.levelStats    ?? {};
+    const sps      = String(fs.strongPotentialStat ?? "").toLowerCase();
     for (const stat of ["might", "dexterity", "awareness", "reason", "presence", "luck"]) {
       const base  = src[stat]      ?? null;
       const bonus = lvlStats[stat] ?? 0;
-      if (base != null) statsObj[stat] = { value: base + bonus };
+      const sp    = sps === stat ? 1 : 0;
+      if (base != null) statsObj[stat] = { value: base + bonus + sp };
     }
 
     // Skills: trained_skills + ancestry_bonus_skill

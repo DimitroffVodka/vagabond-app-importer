@@ -2,6 +2,18 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.6.2 — 2026-04-29
+
+### Fixed
+- **`strongPotentialStat` now applied to imported stats.** vgbnd.app's
+  Human ancestry has a "Strong Potential" trait that grants +1 to a chosen
+  stat, stored on the character document as `strongPotentialStat: "<stat>"`.
+  The importer was ignoring this field — Human characters imported with
+  their chosen stat 1 lower than the canonical vgbnd.app value.
+- Verified on MrLawyerGuy (Human, strongPotential = awareness):
+  awareness imports as 7 (= 6 base + 1 strongPotential), matching the web
+  sheet. Previously imported as 6.
+
 ## v2.6.1 — 2026-04-29
 
 ### Fixed
