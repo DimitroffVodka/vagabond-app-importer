@@ -849,14 +849,27 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     return map[m] ?? null;
   }
 
+  // vgbnd.app uses different relic-power ids than vagabond-crawler in a handful
+  // of cases (different naming choices, not just numeral style). These map the
+  // website id → the crawler id so getRelicPower() finds them.
+  static #WEB_TO_FORGE_RELIC_ID = {
+    "cursed-gulibility":      "cursed-gullibility",
+    "senses-sense-life":      "senses-life",
+    "senses-sense-valuables": "senses-valuables",
+    "senses-true-seeing":     "senses-truesight",
+    "unique-warning":         "utility-warning",
+    "resistance-resistance":  "resistance-typed",
+  };
+
   /**
    * Normalize a vgbnd.app relic-power id to the format vagabond-crawler uses.
-   * vgbnd.app: `strike-i`, `strike-ii`, `strike-iii`
-   * crawler:   `strike-1`, `strike-2`, `strike-3`
+   *   - Static aliases for ids that diverge by name (table above).
+   *   - Roman → arabic numeral suffix: `strike-i/ii/iii` → `strike-1/2/3`.
    */
   static #normalizeRelicPowerId(id) {
     if (!id || typeof id !== "string") return id;
-    return id.replace(/-(i{1,3})$/i, (_, roman) => {
+    const aliased = VgbndBrowserDialog.#WEB_TO_FORGE_RELIC_ID[id] ?? id;
+    return aliased.replace(/-(i{1,3})$/i, (_, roman) => {
       const a = { i: "1", ii: "2", iii: "3" }[roman.toLowerCase()];
       return a ? `-${a}` : `-${roman}`;
     });

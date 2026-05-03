@@ -62,10 +62,21 @@ export class VgbndMapper {
     "ingredients":        "ingredients (1g)",
     // vgbnd.app emits "Basic Torch"; the compendium entry is just "Torch".
     "basic torch":        "torch",
+    // vgbnd.app's underlying `name` field is "Torch, Basic" / "Candle, Basic"
+    // (display_name is "Basic Torch" / "Basic Candle"). Either form maps to
+    // the bare compendium entry.
+    "torch, basic":       "torch",
+    "candle, basic":      "candle",
     // Single-word name — no space for the generic last-word pivot rule to fire on.
     "tindertwig":         "torch, tindertwig",
     // Compendium has only "Unarmed (Brawl)" and "Unarmed (Finesse)" — default to Brawl.
     "unarmed":            "unarmed (brawl)",
+    // vgbnd.app spells it as two words; compendium entry is one word.
+    "smoke stick":        "smokestick",
+    // vgbnd.app pluralizes the category, the compendium uses singular + dash.
+    "ingots, copper":     "ingot - copper",
+    "ingots, silver":     "ingot - silver",
+    "ingots, gold":       "ingot - gold",
   };
 
   // ──────────────────────────────────────────────────────────
@@ -234,6 +245,19 @@ export class VgbndMapper {
       if (lastWordMatch) {
         const [, prefix, pivot] = lastWordMatch;
         push(`${pivot}, ${prefix}`);
+      }
+
+      // Comma ↔ dash separator: vgbnd.app uses "Vial, Glass" / "Wine, Common,
+      // bottle of"; the compendium uses "Vial - Glass" / "Wine - Common, bottle
+      // of". Swap the FIRST ", " for " - " and vice-versa. Only the first
+      // separator is replaced so multi-comma names like "Wine, Common, bottle
+      // of" become "Wine - Common, bottle of" (matches the compendium pattern
+      // for those entries).
+      if (form.includes(", ")) {
+        push(form.replace(", ", " - "));
+      }
+      if (form.includes(" - ")) {
+        push(form.replace(" - ", ", "));
       }
     }
 

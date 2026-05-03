@@ -2,6 +2,75 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.8.1 — 2026-05-03
+
+Aligns the importer's name resolution with vgbnd.app's actual catalog after
+a 3-way audit against the Core Rulebook, vgbnd.app data chunks, and the live
+Foundry compendium. Result: ~92.5% of vgbnd.app's full item catalog now
+resolves to a compendium entry on import (up from ~80% previously); relic
+powers that vgbnd.app emits with website-side ids now apply correctly via
+Relic Forge instead of being silently skipped.
+
+### Added
+
+- **Comma ↔ dash separator rule** in `mapper.mjs#nameVariants`. vgbnd.app
+  emits names like `Vial, Glass`, `Cattle, Bull`, `Wine, Common, bottle of`;
+  the compendium uses `Vial - Glass`, `Cattle - Bull`, `Wine - Common,
+  bottle of`. The new permutation tries both directions on the first
+  separator. Resolves ~30 gear items in one rule, including all of:
+  - `Vial/Jar/Pot, {Clay/Glass/Metal/Iron/Gold-inlaid}` ↔ `Vial - Clay` etc.
+  - `Cattle, {Bison/Bull/Cow/Ox}` ↔ `Cattle - Bison` etc.
+  - `Dog, {Common/Warhound}`, `Fowl, {Duck/Chicken hen/Chicken rooster}`
+  - `Horses, {Draft/Pony/Riding/Warhorse}`
+  - `Fabric, {Plain/Fine}`, `Gem, {Common/Uncommon/Rare/Very rare}`
+  - `Ale/Cider, {Keg/Gallon/Mug}`, `Beer, {Keg/Gallon/Mug}`
+  - `Liquor, {Barrel/Bottle/Shot of}`
+  - `Wine, {Common/Fine}, {bottle/cup/cask} of`
+
+- **Six new `#STATIC_ALIASES` entries** in `mapper.mjs` for irregular cases
+  the generic rules can't reach:
+  - `Torch, Basic` → `Torch` and `Candle, Basic` → `Candle` (vgbnd.app's
+    raw `name` field is the comma-prefix form; the compendium has only
+    the bare entry — this complements the existing `basic torch` alias
+    which keyed on the website's `display_name` form).
+  - `Smoke Stick` → `Smokestick` (website spells it as two words).
+  - `Ingots, Copper/Silver/Gold` → `Ingot - Copper/Silver/Gold` (website
+    pluralizes the category, compendium uses singular + dash).
+
+- **Six new website-id → Forge-id aliases** in `browser-dialog.mjs#normalize`
+  `RelicPowerId`. vgbnd.app and `vagabond-crawler` use different ids for
+  the same powers in a handful of cases; previously these would log
+  "not found in RELIC_POWERS" and the relic-forge step would silently
+  skip the power (item kept its base name and gained no Active Effect).
+  Mappings added:
+  - `cursed-gulibility` → `cursed-gullibility` (typo on website, correct
+    spelling in Forge)
+  - `senses-sense-life` → `senses-life`
+  - `senses-sense-valuables` → `senses-valuables`
+  - `senses-true-seeing` → `senses-truesight`
+  - `unique-warning` → `utility-warning` (different namespace)
+  - `resistance-resistance` → `resistance-typed`
+
+  These are applied **before** the existing roman→arabic numeral
+  normalization (`-i/-ii/-iii` → `-1/-2/-3`), so a website id like
+  `senses-true-seeing` correctly resolves first via alias, then through
+  the regex unchanged.
+
+### Notes
+
+- The audit script and a machine-readable bidirectional mapping JSON live
+  outside the repo in `F:/Vagabond/Json/` (`vgbnd-content-audit.json`,
+  `vgbnd-3way-audit.json`, `forge-vs-website-naming.txt`) for use by
+  follow-on tooling (e.g. an Owlbear Rodeo converter).
+- Remaining gaps are in vgbnd.app's content rather than the importer's
+  resolution: `Toothpaste`, `Alembic`, `Ammunition Container`, and a few
+  others exist on vgbnd.app but not in any Foundry compendium pack. These
+  will continue to surface as "unresolved" warnings on import.
+- All 41 named relics from the Core Rulebook (Vorpal Blade, Bag of
+  Holding, Cloak of Invisibility, etc.) exist in the compendium but
+  not on vgbnd.app — by design, since the website builds relics by
+  combining a base item with powers via Relic Forge.
+
 ## v2.8.0 — 2026-05-03
 
 ### Added
