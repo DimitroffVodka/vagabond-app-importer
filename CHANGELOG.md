@@ -2,6 +2,38 @@
 
 All notable changes to the Vagabond App Importer fork are documented here.
 
+## v2.8.0 — 2026-05-03
+
+### Added
+- **Advancement perks now auto-pick the stat bonus.** vgbnd.app exposes
+  `advancementStats` (separate from the even-level `levelStats` bumps) — a
+  per-stat tally of how each Advancement perk choice was spent. The
+  importer now distributes those points back across each Advancement perk
+  on the way in, then pre-fills the system's stat-choice dialog and
+  suppresses its duplicate Active Effect (the stat value already includes
+  `advancementStats`, so letting the system add another +1 would
+  double-count). The perk name is annotated with the chosen stat label,
+  e.g. `Advancement (Strength)`, so it's clear in the sheet.
+
+### Fixed
+- **Stat sum now includes `advancementStats`.** Previously the formula was
+  `assignedStats + levelStats + strongPotentialStat`, silently omitting
+  `advancementStats`. Characters with Advancement perks imported with
+  stats lower than the canonical vgbnd.app value. Final stat is now
+  `assignedStats + levelStats + advancementStats + strongPotentialStat`.
+  Cross-check against the API's `derived_stats_<stat>` keys to confirm.
+- **Spell list deduped.** Some ancestries (e.g. Elf) include their bonus
+  spell in `known_spells` AND in `ancestry_bonus_spell` — a duplicate
+  spell item was being created. Spells are now deduped by normalized name
+  in both the actor's spell list and the perk-derived spell collection.
+- **Compendium name resolution: three new aliases** in `mapper.mjs#STATIC_ALIASES`:
+  - `Tindertwig` → `Torch, Tindertwig` (single-word name; the generic
+    last-word pivot rule needs whitespace and can't fire).
+  - `Unarmed` → `Unarmed (Brawl)` (the compendium has only the
+    parenthetical Brawl/Finesse variants — no bare entry exists).
+  - `Basic Torch` → `Torch` (vgbnd.app's "basic" qualifier doesn't appear
+    in the compendium entry).
+
 ## v2.7.1 — 2026-04-29
 
 ### Fixed

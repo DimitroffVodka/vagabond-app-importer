@@ -60,6 +60,12 @@ export class VgbndMapper {
     // — default to the cheaper tier; GM can swap to (50s) manually if needed
     "materials":          "materials (1g)",
     "ingredients":        "ingredients (1g)",
+    // vgbnd.app emits "Basic Torch"; the compendium entry is just "Torch".
+    "basic torch":        "torch",
+    // Single-word name — no space for the generic last-word pivot rule to fire on.
+    "tindertwig":         "torch, tindertwig",
+    // Compendium has only "Unarmed (Brawl)" and "Unarmed (Finesse)" — default to Brawl.
+    "unarmed":            "unarmed (brawl)",
   };
 
   // ──────────────────────────────────────────────────────────
@@ -320,6 +326,23 @@ export class VgbndMapper {
     // ── Spells: favorite so they appear on the front of the sheet ──────────────
     if (apiItem.type === "spell") {
       foundry.utils.setProperty(itemData, "system.favorite", true);
+    }
+
+    // ── Advancement perk: pre-fill the stat choice and suppress the duplicate
+    // Active Effect. Our base value already includes levelStats from vgbnd.app,
+    // so letting the system's _onCreate add another +1 would double-count.
+    if (apiItem.type === "perk" && apiItem.selectedStat) {
+      const cc = itemData.system?.choiceConfig;
+      if (cc?.type === "stat") {
+        cc.selected = apiItem.selectedStat;
+        cc.targetField = "";
+        const label = game.i18n.localize(
+          CONFIG.VAGABOND?.stats?.[apiItem.selectedStat] ?? apiItem.selectedStat
+        );
+        if (!itemData.name.includes(label)) {
+          itemData.name = `${itemData.name} (${label})`;
+        }
+      }
     }
 
     // ── Auto-equip focus spells ────────────────────────────────────────────────

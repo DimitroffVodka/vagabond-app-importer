@@ -465,13 +465,22 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
       if (!res.ok) return [];
       const data = await res.json();
       const c = data?.character ?? data ?? {};
+      // Dedupe: some ancestries (e.g. Elf) already include the bonus spell
+      // in known_spells, which would otherwise produce duplicate items.
+      const seen = new Set();
       const names = [];
+      const add = (n) => {
+        if (!n) return;
+        const key = String(n).trim().toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        names.push(n);
+      };
       for (const sp of (c.known_spells ?? [])) {
         if (!sp) continue;
-        const n = typeof sp === "string" ? sp : (sp.name ?? sp.id ?? null);
-        if (n) names.push(n);
+        add(typeof sp === "string" ? sp : (sp.name ?? sp.id ?? null));
       }
-      if (c.ancestry_bonus_spell) names.push(c.ancestry_bonus_spell);
+      add(c.ancestry_bonus_spell);
       return names;
     } catch (err) {
       console.warn("vgbnd-importer | spell-merge fetch failed:", err.message);
@@ -495,16 +504,38 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const className = await VgbndBrowserDialog.#resolveHomebrewName(fs.class, "class");
     if (className) items.push({ name: className, type: "class" });
 
-    // Perks (includes ancestry + class source perks)
+    // Perks (includes ancestry + class source perks).
+    // For Advancement perks (each grants +1 to a stat), vgbnd.app aggregates
+    // every Advancement choice into `advancementStats` (separate from the
+    // even-level auto-bumps in `levelStats`). Distribute those points across
+    // each Advancement perk so the mapper can pre-fill the system's choice
+    // dialog and skip prompting the user.
+    const advBumps = { ...(fs.advancementStats ?? {}) };
     for (const p of (fs.selected_perks ?? [])) {
-      if (p.name) items.push({ name: p.name, type: "perk" });
+      if (!p.name) continue;
+      const itemData = { name: p.name, type: "perk" };
+      if (p.id === "advancement") {
+        const stat = Object.keys(advBumps).find(k => advBumps[k] > 0);
+        if (stat) {
+          advBumps[stat] -= 1;
+          itemData.selectedStat = stat;
+        }
+      }
+      items.push(itemData);
     }
 
-    // Known spells + ancestry bonus spell
-    for (const spellName of (fs.known_spells ?? [])) {
-      if (spellName) items.push({ name: spellName, type: "spell" });
-    }
-    if (fs.ancestry_bonus_spell) items.push({ name: fs.ancestry_bonus_spell, type: "spell" });
+    // Known spells + ancestry bonus spell. Some ancestries (e.g. Elf) already
+    // include their bonus spell in known_spells, so dedupe by normalized name.
+    const seenSpells = new Set();
+    const pushSpell = (name) => {
+      if (!name) return;
+      const key = String(name).trim().toLowerCase();
+      if (seenSpells.has(key)) return;
+      seenSpells.add(key);
+      items.push({ name, type: "spell" });
+    };
+    for (const spellName of (fs.known_spells ?? [])) pushSpell(spellName);
+    pushSpell(fs.ancestry_bonus_spell);
 
     // Inventory → equipment (mapper resolves from weapon/armor/gear packs).
     // If the item has relic_powers or a material, stash that data in a
@@ -540,20 +571,23 @@ export class VgbndBrowserDialog extends HandlebarsApplicationMixin(ApplicationV2
     const img = await VgbndBrowserDialog.#uploadPortrait(charName, fs.character_image_base64)
               ?? "icons/svg/mystery-man.svg";
 
-    // Stats: assignedStats + levelStats bonuses + strongPotentialStat
-    //   - levelStats: stat points gained on level-up
+    // Stats: assignedStats + levelStats + advancementStats + strongPotentialStat
+    //   - levelStats:        +1 from each even-level auto-bump
+    //   - advancementStats:  +1 from each Advancement perk taken
     //   - strongPotentialStat: Human ancestry's "Strong Potential" trait grants
     //     +1 to whichever stat the player chose. vgbnd.app stores the chosen
     //     stat name as a string; non-Human characters just don't have this set.
     const statsObj = {};
-    const src      = fs.assignedStats ?? {};
-    const lvlStats = fs.levelStats    ?? {};
+    const src      = fs.assignedStats     ?? {};
+    const lvlStats = fs.levelStats        ?? {};
+    const advStats = fs.advancementStats  ?? {};
     const sps      = String(fs.strongPotentialStat ?? "").toLowerCase();
     for (const stat of ["might", "dexterity", "awareness", "reason", "presence", "luck"]) {
-      const base  = src[stat]      ?? null;
-      const bonus = lvlStats[stat] ?? 0;
-      const sp    = sps === stat ? 1 : 0;
-      if (base != null) statsObj[stat] = { value: base + bonus + sp };
+      const base = src[stat] ?? null;
+      const lvl  = lvlStats[stat] ?? 0;
+      const adv  = advStats[stat] ?? 0;
+      const sp   = sps === stat ? 1 : 0;
+      if (base != null) statsObj[stat] = { value: base + lvl + adv + sp };
     }
 
     // Skills: trained_skills + ancestry_bonus_skill
